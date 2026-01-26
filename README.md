@@ -1,20 +1,44 @@
-# Vector Dashboard (Qdrant + Live Train Alerts)
+# Golden Retriever : Live Rail Monitoring Platform
+
+Welcome to **Golden Retriever** — our project built for the **Vectors in Orbit Hackathon**.
+
+It’s a live rail monitoring dashboard that combines real-time train + network visualization with “golden run” retrieval: when an incident is detected, we search a vector database of past incidents + expert fixes to propose a best-next action.
+Not only we stop there, we try the historical top-k fixes on the current incident using digital twin simulation to validate the improvements of these "golden runs" retrieved for Qdrant Vector Database.
+
+**Quick start (Windows):** run `start-all.bat` to start all services and open the dashboard.
 
 This repo is a small multi-service system:
 
 1) a React dashboard UI
-2) a Node/Express API
-3) a Qdrant vector database (typically Qdrant Cloud)
-4) optional Python services for embeddings (AI) and simulation (digital twin)
+2) a Node/Express Backend With Transit Land API for Train Tracking
+3) a Qdrant vector database (Qdrant Cloud)
+4) Python services for embeddings (AI) and simulation (digital twin)
 
 The “golden run” idea: store known incidents + expert solutions in Qdrant, then when a live incident occurs, embed the incident text and retrieve the most similar past incident to propose an actionable recommendation.
+
+## What you’ll see in the dashboard
+
+- **Real-time map view** of rail networks (routes) and trains, rendered as an interactive map.
+- **Live alerts** generated from train anomalies, each paired with a recommended response.
+
+Under the hood, the backend’s `GET /api/trains/live` builds a `networks[]` structure (routes + train positions), and the frontend displays it on the map (Leaflet).
+
+## Dataset formation (for training more AI models)
+
+If you want to go beyond retrieval and train additional models (classification, forecasting, anomaly detection), check the dataset pipeline in `ai-service/dataset/`.
+
+- `ai-service/dataset/collect_raw.py` pulls snapshots from the backend (`/api/trains/live`).
+- `ai-service/dataset/build_dataset.py` produces feature tables + labels.
+- Outputs land in `ai-service/dataset/processed/`.
+
+Start here: `ai-service/dataset/README.md`.
 
 ## Architecture
 
 ### High-level data flow
 
 ```
-Transitland (live rail routes)  ───────────────┐
+Transitland (live rail routes)  ─────────────────────────────────────────────────────────────┐
 																							 ▼
 																				 Backend API (Express)
 																							 │
@@ -27,7 +51,7 @@ Transitland (live rail routes)  ───────────────┐
 AI Service (Flask, embeddings) ───► Qdrant (train_alerts vectors) ◄── seed “golden runs”
 																							 │
 																							 ▼
-Frontend (React)  ◄────────────── /api/* responses (alerts, trains, collections)
+                    Frontend (React)  ◄────────────── /api/* responses (alerts, trains, collections)
 ```
 
 ### Components
@@ -41,8 +65,8 @@ Frontend (React)  ◄────────────── /api/* responses
 	- Talks to:
 		- **Transitland API** for live rail route data
 		- **Qdrant** for vector search / storage
-		- **AI Service** (optional) for embeddings
-		- **Digital Twin** (optional) for simulation endpoints
+		- **AI Service** for conflict prediction then for embeddings
+		- **Digital Twin**  for simulation endpoints in order to test historical golden runs
 
 - **Qdrant modules + scripts** (`qdrant/`)
 	- Node modules used by the backend (collection creation, similarity search, templates)
@@ -120,7 +144,7 @@ For Qdrant Cloud setup, see: `QDRANT-CLOUD-SETUP.md`.
 	 ```powershell
 	 .\start-all.bat
 	 ```
-5. Open: http://localhost:3000
+5. This will open the dashboard at: http://localhost:3000
 
 Stop everything:
 
