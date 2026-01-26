@@ -46,13 +46,13 @@ const trainIcon = new L.Icon({
   popupAnchor: [0, -16],
 });
 
-function MapUpdater({ center }) {
+function MapUpdater({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
     if (center) {
-      map.setView(center, map.getZoom());
+      map.setView(center, zoom || map.getZoom(), { animate: true, duration: 1.5 });
     }
-  }, [center, map]);
+  }, [center, zoom, map]);
   return null;
 }
 
@@ -62,6 +62,7 @@ function Dashboard({ stats }) {
   const [trains, setTrains] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [mapCenter, setMapCenter] = useState([20, 0]); // World view default
+  const [mapZoom, setMapZoom] = useState(3); // Default zoom level
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const mapRef = useRef();
@@ -81,6 +82,7 @@ function Dashboard({ stats }) {
       setTrains(allTrains);
       setRoutes(allRoutes);
       setMapCenter([20, 0]); // World view
+      setMapZoom(3); // Zoom out for global view
     } else {
       // Show trains from selected network only
       const network = networks.find(n => n.id === selectedNetwork);
@@ -88,6 +90,7 @@ function Dashboard({ stats }) {
         setTrains(network.trains);
         setRoutes(network.routes);
         setMapCenter(network.center || [20, 0]);
+        setMapZoom(8); // Zoom in to focus on selected network
       }
     }
   }, [selectedNetwork, networks]);
@@ -174,115 +177,6 @@ function Dashboard({ stats }) {
       )}
 
       <Grid container spacing={3}>
-        {/* Network Selector */}
-        <Grid item xs={12}>
-          <Paper sx={{ 
-            p: 3, 
-            background: 'linear-gradient(135deg, #0b0499 0%, #2596be 100%)',
-            color: 'white',
-            borderRadius: 3,
-            boxShadow: '0 8px 32px rgba(11, 4, 153, 0.3)',
-            position: 'relative',
-            overflow: 'hidden',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'radial-gradient(circle at top right, rgba(255,255,255,0.1) 0%, transparent 60%)',
-              pointerEvents: 'none'
-            }
-          }}>
-            <FormControl fullWidth sx={{ position: 'relative', zIndex: 1 }}>
-              <InputLabel 
-                id="network-select-label" 
-                sx={{ 
-                  color: 'white', 
-                  fontWeight: 600,
-                  '&.Mui-focused': { color: 'white' } 
-                }}
-              >
-                🌍 Select Train Network
-              </InputLabel>
-              <Select
-                labelId="network-select-label"
-                id="network-select"
-                value={selectedNetwork}
-                label="🌍 Select Train Network"
-                onChange={handleNetworkChange}
-                sx={{
-                  color: 'white',
-                  fontWeight: 600,
-                  '.MuiOutlinedInput-notchedOutline': { 
-                    borderColor: 'rgba(255,255,255,0.5)',
-                    borderWidth: 2
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { 
-                    borderColor: 'white',
-                    borderWidth: 2
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { 
-                    borderColor: 'white',
-                    borderWidth: 2
-                  },
-                  '.MuiSvgIcon-root': { color: 'white' },
-                  bgcolor: 'rgba(255,255,255,0.1)',
-                  borderRadius: 2
-                }}
-              >
-                <MenuItem value="all">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PublicIcon sx={{ color: '#2596be' }} />
-                    <Typography fontWeight={600}>All Networks</Typography>
-                    <Chip 
-                      label={`${totalTrains} trains`} 
-                      size="small" 
-                      sx={{ bgcolor: '#2596be', color: 'white', fontWeight: 'bold' }}
-                    />
-                  </Box>
-                </MenuItem>
-                {networks.map((network) => (
-                  <MenuItem key={network.id} value={network.id}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                      <Box>
-                        <Typography fontWeight={600}>{network.name}</Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {network.country}
-                        </Typography>
-                      </Box>
-                      <Chip 
-                        label={`${network.trainCount} trains`} 
-                        size="small" 
-                        sx={{ bgcolor: '#0b0499', color: 'white', fontWeight: 'bold' }}
-                      />
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {selectedNetworkData && (
-              <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(255,255,255,0.15)', borderRadius: 2 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" sx={{ opacity: 0.9 }}>Network</Typography>
-                    <Typography variant="body1" fontWeight={700}>
-                      {selectedNetworkData.name}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" sx={{ opacity: 0.9 }}>Region</Typography>
-                    <Typography variant="body1" fontWeight={700}>
-                      {selectedNetworkData.country}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Box>
-            )}
-          </Paper>
-        </Grid>
-
         {statCards.map((stat, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
             <Card sx={{ 
@@ -341,7 +235,7 @@ function Dashboard({ stats }) {
         ))}
 
         {/* Map Section */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={8}>
           <Paper sx={{ 
             p: 3, 
             height: 650, 
@@ -376,7 +270,61 @@ function Dashboard({ stats }) {
                 />
               )}
             </Box>
-            <Box sx={{ height: 580, position: 'relative', borderRadius: 2, overflow: 'hidden' }}>
+
+            {/* Network Selector */}
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel 
+                id="network-select-label" 
+                sx={{ 
+                  fontWeight: 600,
+                }}
+              >
+                🌍 Select Train Network
+              </InputLabel>
+              <Select
+                labelId="network-select-label"
+                id="network-select"
+                value={selectedNetwork}
+                label="🌍 Select Train Network"
+                onChange={handleNetworkChange}
+                sx={{
+                  fontWeight: 600,
+                  bgcolor: '#f8fafc',
+                  borderRadius: 2
+                }}
+              >
+                <MenuItem value="all">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PublicIcon sx={{ color: '#2596be' }} />
+                    <Typography fontWeight={600}>All Networks</Typography>
+                    <Chip 
+                      label={`${totalTrains} trains`} 
+                      size="small" 
+                      sx={{ bgcolor: '#2596be', color: 'white', fontWeight: 'bold' }}
+                    />
+                  </Box>
+                </MenuItem>
+                {networks.map((network) => (
+                  <MenuItem key={network.id} value={network.id}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                      <Box>
+                        <Typography fontWeight={600}>{network.name}</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {network.country}
+                        </Typography>
+                      </Box>
+                      <Chip 
+                        label={`${network.trainCount} trains`} 
+                        size="small" 
+                        sx={{ bgcolor: '#0b0499', color: 'white', fontWeight: 'bold' }}
+                      />
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Box sx={{ height: 420, position: 'relative', borderRadius: 2, overflow: 'hidden' }}>
               {loading && trains.length === 0 ? (
                 <Box sx={{ 
                   display: 'flex', 
@@ -414,6 +362,8 @@ function Dashboard({ stats }) {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
+                  
+                  <MapUpdater center={mapCenter} zoom={mapZoom} />
                   
                   {/* Draw routes */}
                   {routes.map((route, index) => (
@@ -455,7 +405,7 @@ function Dashboard({ stats }) {
         </Grid>
 
         {/* Train List */}
-        <Grid item xs={12}>
+        <Grid item xs={12} md={4}>
           <Paper sx={{ 
             p: 3, 
             height: 650, 

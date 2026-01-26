@@ -1,33 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
   Typography,
   Container,
   Box,
-  Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   CssBaseline,
+  Button,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  Storage as StorageIcon,
   Psychology as PsychologyIcon,
   Settings as SettingsIcon,
   DeviceHub as DeviceHubIcon,
+  Notifications as NotificationsIcon,
 } from '@mui/icons-material';
 import Dashboard from './components/Dashboard';
-import VectorDatabase from './components/VectorDatabase';
 import AIModels from './components/AIModels';
 import DigitalTwin from './components/DigitalTwin';
 import Settings from './components/Settings';
+import Alerts from './components/Alerts';
 import './App.css';
-
-const drawerWidth = 240;
 
 function App() {
   const [stats, setStats] = useState({
@@ -55,57 +49,107 @@ function App() {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Vector Database', icon: <StorageIcon />, path: '/vectors' },
     { text: 'AI Models', icon: <PsychologyIcon />, path: '/ai' },
     { text: 'Digital Twin', icon: <DeviceHubIcon />, path: '/digital-twin' },
+    { text: 'Alerts', icon: <NotificationsIcon />, path: '/alerts' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
   ];
 
   return (
     <Router>
-      <Box sx={{ display: 'flex' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <CssBaseline />
-        <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-          <Toolbar>
-            <Typography variant="h6" noWrap component="div">
-              Train Network Monitoring Platform
-            </Typography>
-          </Toolbar>
-        </AppBar>
-        <Drawer
-          variant="permanent"
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box' },
+        <AppBar 
+          position="fixed" 
+          elevation={0}
+          sx={{ 
+            background: 'linear-gradient(135deg, #1e40af 0%, #0891b2 100%)',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
           }}
         >
-          <Toolbar />
-          <Box sx={{ overflow: 'auto' }}>
-            <List>
-              {menuItems.map((item) => (
-                <ListItem button key={item.text} component={Link} to={item.path}>
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        </Drawer>
-        <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-          <Toolbar />
+          <Toolbar sx={{ justifyContent: 'center', position: 'relative' }}>
+            <Typography 
+              variant="h6" 
+              component="div"
+              sx={{ 
+                position: 'absolute',
+                left: 24,
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              <img 
+                src="/golden-retriever-logo.png" 
+                alt="Golden Retriever" 
+                style={{ 
+                  height: '45px', 
+                  width: 'auto',
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+                }} 
+              />
+              Golden Retriever
+            </Typography>
+            <NavigationTabs menuItems={menuItems} />
+          </Toolbar>
+        </AppBar>
+        <Box 
+          component="main" 
+          sx={{ 
+            flexGrow: 1, 
+            pt: 10, 
+            px: 4, 
+            pb: 4,
+            background: 'linear-gradient(to bottom, #f0f9ff 0%, #e0f2fe 100%)',
+            minHeight: '100vh',
+          }}
+        >
           <Container maxWidth="xl">
             <Routes>
               <Route path="/" element={<Dashboard stats={stats} />} />
-              <Route path="/vectors" element={<VectorDatabase />} />
               <Route path="/ai" element={<AIModels />} />
               <Route path="/digital-twin" element={<DigitalTwin />} />
+              <Route path="/alerts" element={<Alerts />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </Container>
         </Box>
       </Box>
     </Router>
+  );
+}
+
+function NavigationTabs({ menuItems }) {
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  return (
+    <Box sx={{ display: 'flex', gap: 1 }}>
+      {menuItems.map((item) => (
+        <Button
+          key={item.text}
+          component={Link}
+          to={item.path}
+          startIcon={item.icon}
+          sx={{
+            color: 'white',
+            textTransform: 'none',
+            px: 2,
+            py: 1,
+            borderRadius: 2,
+            fontWeight: currentPath === item.path ? 700 : 400,
+            backgroundColor: currentPath === item.path ? 'rgba(255,255,255,0.2)' : 'transparent',
+            '&:hover': {
+              backgroundColor: 'rgba(255,255,255,0.15)',
+            },
+          }}
+        >
+          {item.text}
+        </Button>
+      ))}
+    </Box>
   );
 }
 
