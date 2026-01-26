@@ -1,6 +1,5 @@
-raw/
-processed/
 models/
 __pycache__/
 *.pyc
-
+ai-service/dataset/raw/
+*.jsonl

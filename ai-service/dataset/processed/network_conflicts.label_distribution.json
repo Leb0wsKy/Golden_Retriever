@@ -1,0 +1,6 @@
+{
+  "network_congestion_conflict": 750,
+  "normal": 206,
+  "network_anomaly_spike": 164,
+  "network_delay_conflict": 30
+}

@@ -115,6 +115,16 @@ python3 ai-service/dataset/normalize_network_conflicts_minute.py
 Sortie:
 - `ai-service/dataset/processed/network_conflicts_minute.csv`
 
+## Visualisation rapide (PNG)
+
+```bash
+python3 ai-service/dataset/visualize_conflicts.py \
+  --in ai-service/dataset/processed/network_conflicts_minute.csv
+```
+
+Sortie:
+- `ai-service/dataset/processed/plots/`
+
 Labels réseau possibles:
 - `network_congestion_conflict`
 - `network_proximity_conflict`
