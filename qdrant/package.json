@@ -1,0 +1,17 @@
+{
+  "name": "golden-retriever-qdrant",
+  "version": "1.0.0",
+  "description": "Qdrant vector database modules for Golden Retriever alerts system",
+  "main": "config.js",
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.11.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.5"
+  },
+  "scripts": {
+    "seed": "node seed-alerts.js"
+  },
+  "keywords": ["qdrant", "vector-database", "alerts", "train-monitoring"],
+  "author": "",
+  "license": "ISC"
+}

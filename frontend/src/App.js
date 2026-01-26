@@ -8,17 +8,20 @@ import {
   Box,
   CssBaseline,
   Button,
+  IconButton,
+  Avatar,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  Psychology as PsychologyIcon,
   Settings as SettingsIcon,
-  DeviceHub as DeviceHubIcon,
   Notifications as NotificationsIcon,
+  AccountCircle as AccountCircleIcon,
+  Person as PersonIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 import Dashboard from './components/Dashboard';
-import AIModels from './components/AIModels';
-import DigitalTwin from './components/DigitalTwin';
 import Settings from './components/Settings';
 import Alerts from './components/Alerts';
 import './App.css';
@@ -30,12 +33,21 @@ function App() {
     aiModels: 0,
     uptime: '0h 0m',
   });
+  const [anchorEl, setAnchorEl] = useState(null);
 
   useEffect(() => {
     fetchStats();
     const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleProfileClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleProfileClose = () => {
+    setAnchorEl(null);
+  };
 
   const fetchStats = async () => {
     try {
@@ -49,8 +61,6 @@ function App() {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'AI Models', icon: <PsychologyIcon />, path: '/ai' },
-    { text: 'Digital Twin', icon: <DeviceHubIcon />, path: '/digital-twin' },
     { text: 'Alerts', icon: <NotificationsIcon />, path: '/alerts' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
   ];
@@ -93,6 +103,62 @@ function App() {
               Golden Retriever
             </Typography>
             <NavigationTabs menuItems={menuItems} />
+            <Box sx={{ position: 'absolute', right: 24 }}>
+              <IconButton
+                onClick={handleProfileClick}
+                sx={{
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  },
+                }}
+              >
+                <Avatar 
+                  sx={{ 
+                    width: 40, 
+                    height: 40,
+                    bgcolor: 'rgba(255, 255, 255, 0.2)',
+                    border: '2px solid white',
+                  }}
+                >
+                  <AccountCircleIcon sx={{ fontSize: 28 }} />
+                </Avatar>
+              </IconButton>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleProfileClose}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                PaperProps={{
+                  sx: {
+                    mt: 1,
+                    minWidth: 200,
+                    borderRadius: 2,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                  },
+                }}
+              >
+                <MenuItem onClick={handleProfileClose}>
+                  <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: '#0891b2' }} />
+                  Profile
+                </MenuItem>
+                <MenuItem onClick={handleProfileClose}>
+                  <SettingsIcon sx={{ mr: 1.5, fontSize: 20, color: '#0891b2' }} />
+                  Settings
+                </MenuItem>
+                <MenuItem onClick={handleProfileClose}>
+                  <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: '#0891b2' }} />
+                  Logout
+                </MenuItem>
+              </Menu>
+            </Box>
           </Toolbar>
         </AppBar>
         <Box 
@@ -109,8 +175,6 @@ function App() {
           <Container maxWidth="xl">
             <Routes>
               <Route path="/" element={<Dashboard stats={stats} />} />
-              <Route path="/ai" element={<AIModels />} />
-              <Route path="/digital-twin" element={<DigitalTwin />} />
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>

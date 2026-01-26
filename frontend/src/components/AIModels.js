@@ -10,7 +10,10 @@ import {
   TextField,
   CircularProgress,
 } from '@mui/material';
-import { PlayArrow as PlayIcon } from '@mui/icons-material';
+import { 
+  PlayArrow as PlayIcon,
+  Psychology as PsychologyIcon,
+} from '@mui/icons-material';
 import axios from 'axios';
 
 function AIModels() {
@@ -63,15 +66,30 @@ function AIModels() {
   };
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        AI Models
-      </Typography>
+    <Box sx={{ 
+      bgcolor: '#f8f9fa', 
+      minHeight: '100vh', 
+      p: { xs: 2, md: 4 },
+      background: 'linear-gradient(180deg, #e3f2fd 0%, #f8f9fa 100%)'
+    }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+        <PsychologyIcon sx={{ mr: 1.5, fontSize: 40, color: '#0891b2' }} />
+        <Typography variant="h4" sx={{ fontWeight: 800, color: '#1e40af' }}>
+          AI Models
+        </Typography>
+      </Box>
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
+          <Paper sx={{ 
+            p: 3,
+            bgcolor: 'white',
+            borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+            border: '1px solid rgba(0,0,0,0.05)',
+            height: '100%'
+          }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#1e40af', mb: 2 }}>
               Text Embedding Generator
             </Typography>
             <TextField
@@ -89,6 +107,18 @@ function AIModels() {
               onClick={generateEmbedding}
               disabled={loading || !inputText}
               fullWidth
+              sx={{
+                background: 'linear-gradient(135deg, #1e40af 0%, #0891b2 100%)',
+                color: 'white',
+                fontWeight: 600,
+                py: 1.5,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #1e3a8a 0%, #0e7490 100%)',
+                },
+                '&:disabled': {
+                  background: '#e0e0e0',
+                }
+              }}
             >
               Generate Embedding
             </Button>
@@ -108,14 +138,27 @@ function AIModels() {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
+          <Paper sx={{ 
+            p: 3,
+            bgcolor: 'white',
+            borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+            border: '1px solid rgba(0,0,0,0.05)',
+            height: '100%'
+          }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#1e40af', mb: 2 }}>
               Model Predictions
             </Typography>
             {prediction && (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2">Latest Prediction:</Typography>
-                <Paper sx={{ p: 2, mt: 1, bgcolor: '#e3f2fd' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1e40af', mb: 1 }}>Latest Prediction:</Typography>
+                <Paper sx={{ 
+                  p: 2, 
+                  mt: 1, 
+                  background: 'linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%)',
+                  border: '1px solid rgba(8, 145, 178, 0.2)',
+                  borderRadius: 2
+                }}>
                   <Typography variant="body2">
                     Confidence: {(prediction.confidence * 100).toFixed(2)}%
                     <br />
@@ -129,15 +172,24 @@ function AIModels() {
 
         {models.map((model) => (
           <Grid item xs={12} sm={6} md={4} key={model.id}>
-            <Card>
+            <Card sx={{
+              borderRadius: 3,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+              border: '1px solid rgba(0,0,0,0.05)',
+              transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 12px 48px rgba(0,0,0,0.12)',
+              },
+            }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#1e40af' }}>
                   {model.name}
                 </Typography>
                 <Typography variant="body2" color="textSecondary" paragraph>
                   {model.description}
                 </Typography>
-                <Typography variant="caption" display="block" gutterBottom>
+                <Typography variant="caption" display="block" gutterBottom sx={{ fontWeight: 600 }}>
                   Status: {model.status}
                 </Typography>
                 <Button
@@ -146,6 +198,15 @@ function AIModels() {
                   onClick={() => runPrediction(model.id)}
                   disabled={loading || !inputText}
                   fullWidth
+                  sx={{
+                    borderColor: '#0891b2',
+                    color: '#0891b2',
+                    fontWeight: 600,
+                    '&:hover': {
+                      borderColor: '#1e40af',
+                      bgcolor: 'rgba(30, 64, 175, 0.04)',
+                    }
+                  }}
                 >
                   Run Prediction
                 </Button>
