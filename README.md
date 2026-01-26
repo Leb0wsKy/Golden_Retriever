@@ -1,6 +1,6 @@
 # Vector Database Dashboard
 
-A full-stack dashboard application for managing vector databases with AI integration and digital twin simulation.
+A full-stack dashboard application for managing vector databases with Qdrant Cloud integration and live train tracking.
 
 ## Project Structure
 
@@ -8,93 +8,91 @@ A full-stack dashboard application for managing vector databases with AI integra
 Vectors/
 ├── frontend/           # React dashboard
 ├── backend/           # Node.js API server
-├── ai-service/        # Python Flask AI service
-├── digital-twin/      # Python digital twin simulation
-└── docker-compose.yml # Docker configuration
+├── ai-service/        # Python Flask AI service (optional)
+├── digital-twin/      # Python digital twin simulation (optional)
+└── .env              # Environment configuration
 ```
 
 ## Features
 
-- **Vector Database Management**: Create and manage Qdrant collections
-- **AI-Powered Search**: Semantic search using sentence transformers
-- **Real-time Dashboard**: Monitor performance metrics and statistics
-- **Digital Twin Simulation**: Simulate and predict system behavior
-- **Multi-Model Support**: Multiple AI models for embeddings and predictions
+- **Live Train Tracking**: Real-time train monitoring using Transitland API
+- **Qdrant Cloud Integration**: Vector database management in the cloud
+- **Interactive Dashboard**: Real-time maps and train data visualization
+- **Multi-Network Support**: Track trains across multiple rail networks worldwide
 
 ## Prerequisites
 
-- Node.js 16+
-- Python 3.9+
-- Qdrant (running locally or cloud)
-- npm or yarn
+- Node.js 16+ ([Download](https://nodejs.org/))
+- Qdrant Cloud account (free tier available at [cloud.qdrant.io](https://cloud.qdrant.io))
+- Transitland API key
 
 ## Quick Start
 
-### Windows Quick Start (Easiest)
+### 1. Clone and Setup
 
-**First Time Setup:**
 ```bash
-# Run complete setup (installs everything)
+# Clone the repository
+git clone <your-repo-url>
+cd Vectors
+
+# Run setup to install dependencies
 setup.bat
 ```
 
-**Daily Use:**
+### 2. Configure Qdrant Cloud
+
+1. Create account at [https://cloud.qdrant.io](https://cloud.qdrant.io)
+2. Create a cluster and get your credentials
+3. Update `.env` and `backend/.env` with your Qdrant Cloud URL and API key
+
+See [QDRANT-CLOUD-SETUP.md](QDRANT-CLOUD-SETUP.md) for detailed instructions.
+
+### 3. Start the Application
+
+**Using the batch file (Windows):**
 ```bash
-# Start all services (includes Qdrant check)
 start-all.bat
 ```
 
-**Manual Steps:**
-1. **Start Docker Desktop** (if not running)
-2. **Start Qdrant**:
-   ```bash
-   start-qdrant.bat
-   ```
-3. **Install dependencies** (first time only):
-   ```bash
-   install-deps.bat
-   ```
-4. **Configure API Key** (optional for local use): Edit `.env` files in `backend` and `ai-service` folders
-5. **Start all services**:
-   ```bash
-   start-all.bat
-   ```
-6. **Access the dashboard**: http://localhost:3000
-
-**Stop Everything:**
+**Or manually:**
 ```bash
-stop-all.bat      # Stop application services
-stop-qdrant.bat   # Stop Qdrant database
-```
-
-### Manual Setup
-
-### 1. Setup Qdrant
-
-```bash
-# Using Docker
-docker pull qdrant/qdrant
-docker run -p 6333:6333 qdrant/qdrant
-```
-
-### 2. Backend Setup
-
-```bash
+# Terminal 1 - Backend
 cd backend
-npm install
-# Edit .env file with your Qdrant API key
+npm start
+
+# Terminal 2 - Frontend
+cd frontend
 npm start
 ```
 
-### 3. AI Service Setup
+### 4. Access the Dashboard
 
+Open your browser to: **http://localhost:3000**
+
+**Stop Everything:**
 ```bash
-cd ai-service
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
+stop-all.bat
+```
+
+## Environment Configuration
+
+Make sure these files are configured with your Qdrant Cloud credentials:
+
+**`.env` (root directory):**
+```bash
+QDRANT_URL=https://your-cluster-url.qdrant.io
+QDRANT_API_KEY=your_api_key
+TRANSITLAND_API_KEY=your_transitland_key
+```
+
+**`backend/.env`:**
+```bash
+PORT=5000
+QDRANT_URL=https://your-cluster-url.qdrant.io
+QDRANT_API_KEY=your_api_key
+TRANSITLAND_API_KEY=your_transitland_key
+TRANSITLAND_BASE_URL=https://transit.land/api/v2
+```
 
 pip install -r requirements.txt
 # Edit .env file with your Qdrant API key
