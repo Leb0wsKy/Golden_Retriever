@@ -145,6 +145,54 @@ class ConflictGenerator:
             ResolutionStrategy.REROUTE,
             ResolutionStrategy.CANCELLATION,
         ],
+        # New conflict types
+        ConflictType.SIGNAL_FAILURE: [
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.REROUTE,
+            ResolutionStrategy.HOLD,
+            ResolutionStrategy.CANCELLATION,
+        ],
+        ConflictType.CREW_SHORTAGE: [
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.CANCELLATION,
+            ResolutionStrategy.REORDER,
+        ],
+        ConflictType.ROLLING_STOCK_FAILURE: [
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.CANCELLATION,
+            ResolutionStrategy.REORDER,
+        ],
+        ConflictType.WEATHER_DISRUPTION: [
+            ResolutionStrategy.SPEED_ADJUSTMENT,
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.CANCELLATION,
+            ResolutionStrategy.REROUTE,
+        ],
+        ConflictType.TIMETABLE_CONFLICT: [
+            ResolutionStrategy.REORDER,
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.PLATFORM_CHANGE,
+        ],
+        ConflictType.PASSENGER_INCIDENT: [
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.HOLD,
+            ResolutionStrategy.CANCELLATION,
+        ],
+        ConflictType.INFRASTRUCTURE_WORK: [
+            ResolutionStrategy.REROUTE,
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.CANCELLATION,
+        ],
+        ConflictType.POWER_OUTAGE: [
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.CANCELLATION,
+            ResolutionStrategy.REROUTE,
+        ],
+        ConflictType.LEVEL_CROSSING_INCIDENT: [
+            ResolutionStrategy.DELAY,
+            ResolutionStrategy.HOLD,
+            ResolutionStrategy.REROUTE,
+        ],
     }
     
     # Severity weights by conflict type (higher = more severe on average)
@@ -168,6 +216,61 @@ class ConflictGenerator:
             ConflictSeverity.CRITICAL: 0.35,
         },
         ConflictType.CAPACITY_OVERLOAD: {
+            ConflictSeverity.LOW: 0.2,
+            ConflictSeverity.MEDIUM: 0.35,
+            ConflictSeverity.HIGH: 0.3,
+            ConflictSeverity.CRITICAL: 0.15,
+        },
+        # New conflict types severity distributions
+        ConflictType.SIGNAL_FAILURE: {
+            ConflictSeverity.LOW: 0.1,
+            ConflictSeverity.MEDIUM: 0.2,
+            ConflictSeverity.HIGH: 0.45,
+            ConflictSeverity.CRITICAL: 0.25,
+        },
+        ConflictType.CREW_SHORTAGE: {
+            ConflictSeverity.LOW: 0.1,
+            ConflictSeverity.MEDIUM: 0.3,
+            ConflictSeverity.HIGH: 0.4,
+            ConflictSeverity.CRITICAL: 0.2,
+        },
+        ConflictType.ROLLING_STOCK_FAILURE: {
+            ConflictSeverity.LOW: 0.15,
+            ConflictSeverity.MEDIUM: 0.25,
+            ConflictSeverity.HIGH: 0.4,
+            ConflictSeverity.CRITICAL: 0.2,
+        },
+        ConflictType.WEATHER_DISRUPTION: {
+            ConflictSeverity.LOW: 0.2,
+            ConflictSeverity.MEDIUM: 0.35,
+            ConflictSeverity.HIGH: 0.3,
+            ConflictSeverity.CRITICAL: 0.15,
+        },
+        ConflictType.TIMETABLE_CONFLICT: {
+            ConflictSeverity.LOW: 0.3,
+            ConflictSeverity.MEDIUM: 0.4,
+            ConflictSeverity.HIGH: 0.25,
+            ConflictSeverity.CRITICAL: 0.05,
+        },
+        ConflictType.PASSENGER_INCIDENT: {
+            ConflictSeverity.LOW: 0.25,
+            ConflictSeverity.MEDIUM: 0.35,
+            ConflictSeverity.HIGH: 0.3,
+            ConflictSeverity.CRITICAL: 0.1,
+        },
+        ConflictType.INFRASTRUCTURE_WORK: {
+            ConflictSeverity.LOW: 0.15,
+            ConflictSeverity.MEDIUM: 0.3,
+            ConflictSeverity.HIGH: 0.4,
+            ConflictSeverity.CRITICAL: 0.15,
+        },
+        ConflictType.POWER_OUTAGE: {
+            ConflictSeverity.LOW: 0.05,
+            ConflictSeverity.MEDIUM: 0.2,
+            ConflictSeverity.HIGH: 0.45,
+            ConflictSeverity.CRITICAL: 0.3,
+        },
+        ConflictType.LEVEL_CROSSING_INCIDENT: {
             ConflictSeverity.LOW: 0.2,
             ConflictSeverity.MEDIUM: 0.35,
             ConflictSeverity.HIGH: 0.3,
@@ -485,6 +588,98 @@ class ConflictGenerator:
             "time_window_minutes": time_window,
             "overflow_count": current_demand - station_capacity,
             "platform_utilization_percent": min(100, int((current_demand / station_capacity) * 100)),
+        }
+        
+        return description, metadata
+    
+    def _generate_generic_conflict_details(
+        self,
+        conflict_type: ConflictType,
+        station: str,
+        trains: List[str],
+        severity: ConflictSeverity,
+        time_of_day: TimeOfDay,
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Generate generic details for new conflict types."""
+        
+        # Map conflict types to descriptions
+        descriptions_map = {
+            ConflictType.SIGNAL_FAILURE: [
+                f"Signal failure affecting {station}",
+                f"Track circuit failure near {station}",
+                f"Points failure impacting operations",
+                f"Signaling system malfunction",
+            ],
+            ConflictType.CREW_SHORTAGE: [
+                f"Driver unavailable for scheduled service",
+                f"Guard/conductor shortage at {station}",
+                f"Crew timing violation - insufficient rest period",
+                f"Crew allocation conflict",
+            ],
+            ConflictType.ROLLING_STOCK_FAILURE: [
+                f"Train mechanical failure at {station}",
+                f"Door fault requiring platform-side intervention",
+                f"Brake system issue detected",
+                f"Power system malfunction",
+            ],
+            ConflictType.WEATHER_DISRUPTION: [
+                f"Severe weather affecting {station} operations",
+                f"High winds causing speed restrictions",
+                f"Flooding near track sections",
+                f"Ice/snow causing adhesion issues",
+            ],
+            ConflictType.TIMETABLE_CONFLICT: [
+                f"Scheduling overlap at {station}",
+                f"Conflicting service paths in timetable",
+                f"Resource allocation double-booking",
+                f"Timing conflict between services",
+            ],
+            ConflictType.PASSENGER_INCIDENT: [
+                f"Passenger medical emergency at {station}",
+                f"Security incident requiring service hold",
+                f"Overcrowding safety concern",
+                f"Emergency services access required",
+            ],
+            ConflictType.INFRASTRUCTURE_WORK: [
+                f"Planned engineering work overrunning at {station}",
+                f"Emergency track repairs required",
+                f"Platform maintenance affecting capacity",
+                f"Overhead line equipment work",
+            ],
+            ConflictType.POWER_OUTAGE: [
+                f"Power supply failure at {station}",
+                f"Overhead line de-energized",
+                f"Substation trip affecting services",
+                f"Third rail power loss",
+            ],
+            ConflictType.LEVEL_CROSSING_INCIDENT: [
+                f"Level crossing failure near {station}",
+                f"Vehicle obstruction at level crossing",
+                f"Barrier malfunction requiring manual operation",
+                f"Level crossing safety system fault",
+            ],
+        }
+        
+        base_description = self._rng.choice(descriptions_map.get(conflict_type, ["Unknown conflict type"]))
+        
+        if len(trains) > 0:
+            description = (
+                f"{base_description}. "
+                f"Affecting {', '.join(trains[:3])}{'...' if len(trains) > 3 else ''}. "
+                f"Severity: {severity.value}. "
+                f"During {time_of_day.value.replace('_', ' ')} period."
+            )
+        else:
+            description = (
+                f"{base_description}. "
+                f"Severity: {severity.value}. "
+                f"During {time_of_day.value.replace('_', ' ')} period."
+            )
+        
+        metadata = {
+            "estimated_duration_minutes": self._rng.randint(5, 120),
+            "passenger_impact_estimate": self._rng.randint(50, 1000),
+            "requires_emergency_services": self._rng.random() < 0.1,
         }
         
         return description, metadata

@@ -6,8 +6,32 @@ echo.
 echo Using Qdrant Cloud (no local Docker needed)
 echo.
 
+REM Start Digital Twin FastAPI Service
+echo [1/4] Starting Digital Twin Service (FastAPI)
+cd digital-twin
+if not exist venv (
+    echo Creating virtual environment...
+    python -m venv venv
+)
+start "Digital Twin - Port 8000" cmd /k "venv\Scripts\activate && pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+cd ..
+timeout /t 5 /nobreak >nul
+echo.
+
+REM Start AI Service
+echo [2/4] Starting AI Service (Flask)
+cd ai-service
+if not exist venv (
+    echo Creating virtual environment...
+    python -m venv venv
+)
+start "AI Service - Port 5001" cmd /k "venv\Scripts\activate && pip install -r requirements.txt && python app.py"
+cd ..
+timeout /t 5 /nobreak >nul
+echo.
+
 REM Start Backend
-echo [1/2] Starting Backend API (Node.js)
+echo [3/4] Starting Backend API (Node.js)
 cd backend
 if not exist node_modules (
     echo Installing backend dependencies...
@@ -19,7 +43,7 @@ timeout /t 3 /nobreak >nul
 echo.
 
 REM Start Frontend
-echo [2/2] Starting Frontend Dashboard (React)
+echo [4/4] Starting Frontend Dashboard (React)
 cd frontend
 if not exist node_modules (
     echo Installing frontend dependencies...
@@ -40,6 +64,8 @@ echo ============================================
 echo.
 echo Services running:
 echo   - Qdrant Cloud: Connected (configured in .env)
+echo   - Digital Twin (FastAPI): http://localhost:8000
+echo   - AI Service (Flask): http://localhost:5001
 echo   - Backend API: http://localhost:5000
 echo   - Frontend Dashboard: http://localhost:3000
 echo.

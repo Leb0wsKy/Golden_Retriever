@@ -396,11 +396,94 @@ app.post('/api/ai/predict', async (req, res) => {
   }
 });
 
-// Digital Twin Routes (proxy to Python service)
+// Digital Twin Routes (proxy to FastAPI service)
+// Health check for digital twin service
+app.get('/api/digital-twin/health', async (req, res) => {
+  try {
+    const response = await axios.get(`${process.env.DIGITAL_TWIN_URL}/health`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching digital twin health:', error);
+    res.status(500).json({ error: 'Digital twin service unavailable' });
+  }
+});
+
+// Generate conflicts
+app.post('/api/digital-twin/conflicts/generate', async (req, res) => {
+  try {
+    const response = await axios.post(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/generate`,
+      req.body
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error generating conflicts:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate conflicts',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Get recommendations for a conflict
+app.post('/api/digital-twin/recommendations', async (req, res) => {
+  try {
+    const response = await axios.post(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/`,
+      req.body
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error getting recommendations:', error);
+    res.status(500).json({ 
+      error: 'Failed to get recommendations',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Submit feedback for a recommendation
+app.post('/api/digital-twin/recommendations/feedback', async (req, res) => {
+  try {
+    const response = await axios.post(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/feedback`,
+      req.body
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error submitting feedback:', error);
+    res.status(500).json({ 
+      error: 'Failed to submit feedback',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Get learning metrics
+app.get('/api/digital-twin/metrics/learning', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/metrics/learning`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching learning metrics:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch learning metrics',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Legacy data endpoint for backward compatibility
 app.get('/api/digital-twin/data', async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.DIGITAL_TWIN_URL}/data`);
-    res.json(response.data);
+    // Return mock data or redirect to new metrics endpoint
+    res.json({
+      timestamp: new Date().toISOString(),
+      status: 'active',
+      message: 'Use /api/digital-twin/metrics/learning for detailed metrics'
+    });
   } catch (error) {
     console.error('Error fetching digital twin data:', error);
     res.json({
@@ -417,34 +500,28 @@ app.get('/api/digital-twin/data', async (req, res) => {
   }
 });
 
+// Simulation is now embedded in recommendation process
+// These endpoints are deprecated but kept for backward compatibility
 app.post('/api/digital-twin/start', async (req, res) => {
-  try {
-    const response = await axios.post(`${process.env.DIGITAL_TWIN_URL}/start`, req.body);
-    res.json(response.data);
-  } catch (error) {
-    console.error('Error starting simulation:', error);
-    res.json({ success: true, message: 'Simulation started' });
-  }
+  res.json({ 
+    success: true, 
+    message: 'Simulation is now event-driven. Generate conflicts to trigger simulation.',
+    endpoint: '/api/digital-twin/conflicts/generate'
+  });
 });
 
 app.post('/api/digital-twin/stop', async (req, res) => {
-  try {
-    const response = await axios.post(`${process.env.DIGITAL_TWIN_URL}/stop`);
-    res.json(response.data);
-  } catch (error) {
-    console.error('Error stopping simulation:', error);
-    res.json({ success: true, message: 'Simulation stopped' });
-  }
+  res.json({ 
+    success: true, 
+    message: 'Simulation runs per-request. No continuous process to stop.'
+  });
 });
 
 app.post('/api/digital-twin/reset', async (req, res) => {
-  try {
-    const response = await axios.post(`${process.env.DIGITAL_TWIN_URL}/reset`);
-    res.json(response.data);
-  } catch (error) {
-    console.error('Error resetting simulation:', error);
-    res.json({ success: true, message: 'Simulation reset' });
-  }
+  res.json({ 
+    success: true, 
+    message: 'No persistent state to reset. Each request is independent.'
+  });
 });
 
 // Settings Routes

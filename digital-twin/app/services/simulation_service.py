@@ -225,6 +225,145 @@ STRATEGY_EFFECTIVENESS = {
         # Platform change has limited effect on capacity
         ResolutionStrategy.PLATFORM_CHANGE: 0.30,
     },
+    # New conflict types with optimized strategies
+    ConflictType.SIGNAL_FAILURE: {
+        # Reroute around failed signal
+        ResolutionStrategy.REROUTE: 0.80,
+        # Hold trains until repair
+        ResolutionStrategy.HOLD: 0.70,
+        # Delay while fixing
+        ResolutionStrategy.DELAY: 0.65,
+        # Speed reduction for manual operation
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.60,
+        # Reorder to minimize impact
+        ResolutionStrategy.REORDER: 0.50,
+        # Cancellation if severe
+        ResolutionStrategy.CANCELLATION: 0.85,
+        ResolutionStrategy.PLATFORM_CHANGE: 0.25,
+    },
+    ConflictType.CREW_SHORTAGE: {
+        # Cancel service without crew
+        ResolutionStrategy.CANCELLATION: 0.90,
+        # Delay until crew available
+        ResolutionStrategy.DELAY: 0.75,
+        # Reorder to use available crews efficiently
+        ResolutionStrategy.REORDER: 0.70,
+        # Reroute to crew availability
+        ResolutionStrategy.REROUTE: 0.50,
+        # Other strategies less effective
+        ResolutionStrategy.HOLD: 0.40,
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.20,
+        ResolutionStrategy.PLATFORM_CHANGE: 0.15,
+    },
+    ConflictType.ROLLING_STOCK_FAILURE: {
+        # Cancellation if no spare stock
+        ResolutionStrategy.CANCELLATION: 0.85,
+        # Delay for repairs or replacement
+        ResolutionStrategy.DELAY: 0.70,
+        # Reroute to depot/maintenance
+        ResolutionStrategy.REROUTE: 0.65,
+        # Reorder to minimize disruption
+        ResolutionStrategy.REORDER: 0.55,
+        # Hold at safe location
+        ResolutionStrategy.HOLD: 0.50,
+        # Speed reduction if partial failure
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.45,
+        ResolutionStrategy.PLATFORM_CHANGE: 0.20,
+    },
+    ConflictType.WEATHER_DISRUPTION: {
+        # Speed reduction for safety
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.85,
+        # Delay until conditions improve
+        ResolutionStrategy.DELAY: 0.75,
+        # Reroute around affected area
+        ResolutionStrategy.REROUTE: 0.70,
+        # Hold services if severe
+        ResolutionStrategy.HOLD: 0.65,
+        # Cancel if dangerous
+        ResolutionStrategy.CANCELLATION: 0.80,
+        # Reorder based on route exposure
+        ResolutionStrategy.REORDER: 0.55,
+        ResolutionStrategy.PLATFORM_CHANGE: 0.30,
+    },
+    ConflictType.TIMETABLE_CONFLICT: {
+        # Reorder services to fix schedule
+        ResolutionStrategy.REORDER: 0.85,
+        # Delay to create gaps
+        ResolutionStrategy.DELAY: 0.75,
+        # Platform change for better flow
+        ResolutionStrategy.PLATFORM_CHANGE: 0.70,
+        # Speed adjustment to catch up
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.65,
+        # Reroute if conflicts persist
+        ResolutionStrategy.REROUTE: 0.55,
+        # Hold to reset timing
+        ResolutionStrategy.HOLD: 0.50,
+        # Cancellation as last resort
+        ResolutionStrategy.CANCELLATION: 0.75,
+    },
+    ConflictType.PASSENGER_INCIDENT: {
+        # Hold while incident resolved
+        ResolutionStrategy.HOLD: 0.80,
+        # Delay for passenger safety
+        ResolutionStrategy.DELAY: 0.75,
+        # Platform change if needed
+        ResolutionStrategy.PLATFORM_CHANGE: 0.65,
+        # Reorder if multiple trains affected
+        ResolutionStrategy.REORDER: 0.55,
+        # Cancel if severe incident
+        ResolutionStrategy.CANCELLATION: 0.70,
+        # Speed reduction on approach
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.45,
+        # Reroute rarely helps
+        ResolutionStrategy.REROUTE: 0.30,
+    },
+    ConflictType.INFRASTRUCTURE_WORK: {
+        # Reroute around work zone
+        ResolutionStrategy.REROUTE: 0.85,
+        # Delay until work window closes
+        ResolutionStrategy.DELAY: 0.70,
+        # Speed reduction through work zone
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.65,
+        # Reorder for efficiency
+        ResolutionStrategy.REORDER: 0.60,
+        # Platform change if station work
+        ResolutionStrategy.PLATFORM_CHANGE: 0.55,
+        # Cancel if blocking
+        ResolutionStrategy.CANCELLATION: 0.75,
+        # Hold until clear
+        ResolutionStrategy.HOLD: 0.50,
+    },
+    ConflictType.POWER_OUTAGE: {
+        # Delay until power restored
+        ResolutionStrategy.DELAY: 0.80,
+        # Reroute to powered sections
+        ResolutionStrategy.REROUTE: 0.75,
+        # Cancel electric services
+        ResolutionStrategy.CANCELLATION: 0.85,
+        # Hold at safe location
+        ResolutionStrategy.HOLD: 0.70,
+        # Reorder based on power availability
+        ResolutionStrategy.REORDER: 0.60,
+        # Speed reduction rarely helps
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.30,
+        ResolutionStrategy.PLATFORM_CHANGE: 0.25,
+    },
+    ConflictType.LEVEL_CROSSING_INCIDENT: {
+        # Hold trains approaching crossing
+        ResolutionStrategy.HOLD: 0.85,
+        # Delay until cleared
+        ResolutionStrategy.DELAY: 0.75,
+        # Speed reduction on approach
+        ResolutionStrategy.SPEED_ADJUSTMENT: 0.70,
+        # Reroute if alternative exists
+        ResolutionStrategy.REROUTE: 0.60,
+        # Reorder based on distance
+        ResolutionStrategy.REORDER: 0.50,
+        # Cancel if severe
+        ResolutionStrategy.CANCELLATION: 0.65,
+        # Platform change not applicable
+        ResolutionStrategy.PLATFORM_CHANGE: 0.15,
+    },
 }
 
 # -----------------------------------------------------------------------------

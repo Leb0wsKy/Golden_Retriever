@@ -29,6 +29,11 @@ from app.services.schedule_conflict_generator import (
     get_hybrid_generator,
     get_schedule_conflict_generator,
 )
+from app.services.transitland_conflict_service import (
+    TransitlandConflictService,
+    get_transitland_conflict_service,
+    GenerationConfig,
+)
 from app.services.embedding_service import EmbeddingService, get_embedding_service
 from app.services.qdrant_service import QdrantService, get_qdrant_service
 from app.services.recommendation_engine import (
@@ -809,6 +814,154 @@ async def get_conflict_recommendations(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate recommendations: {str(e)}"
+        )
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+@router.post("/generate-from-schedules")
+async def generate_conflicts_from_transitland(
+    stations: Optional[List[str]] = None,
+    count: int = Query(default=10, ge=1, le=100, description="Conflicts to generate"),
+    schedule_date: Optional[str] = Query(default=None, description="Date (YYYY-MM-DD)"),
+    auto_store: bool = Query(default=True, description="Auto-store in Qdrant"),
+):
+    """
+    🚂 Generate conflicts from real Transitland schedule data.
+    
+    This endpoint automatically:
+    1. Fetches real train schedules from Transitland API
+    2. Analyzes schedules for conflicts (platform conflicts, headway violations, etc.)
+    3. Generates realistic conflicts based on actual timetables
+    4. Optionally stores them in Qdrant with embeddings
+    
+    **Key Features:**
+    - Uses REAL schedule data from UK rail networks
+    - Detects actual platform conflicts and timing issues
+    - Generates embeddings for similarity search
+    - Stores in Qdrant for historical analysis
+    
+    **Example:**
+    Generate 20 conflicts from London Euston and Manchester Piccadilly:
+    ```
+    POST /api/v1/conflicts/generate-from-schedules?count=20
+    Body: ["London Euston", "Manchester Piccadilly"]
+    ```
+    
+    Args:
+        stations: List of station names (None = use configured UK stations).
+        count: Number of conflicts to generate (max 100).
+        schedule_date: Date for schedules in YYYY-MM-DD format (None = today).
+        auto_store: Whether to automatically store in Qdrant.
+    
+    Returns:
+        Generation result with conflicts and statistics.
+    """
+    import time
+    from datetime import date as dt_date
+    
+    start_time = time.time()
+    
+    try:
+        # Parse date if provided
+        target_date = None
+        if schedule_date:
+            try:
+                target_date = dt_date.fromisoformat(schedule_date)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid date format: {schedule_date}. Use YYYY-MM-DD"
+                )
+        
+        # Get Transitland conflict service
+        service = get_transitland_conflict_service()
+        
+        # Update config for this request
+        service.config.auto_store_in_qdrant = auto_store
+        service.config.generate_embeddings = auto_store
+        
+        logger.info(
+            f"Generating {count} conflicts from Transitland for stations: "
+            f"{stations or 'all configured'}"
+        )
+        
+        # Generate conflicts
+        result = await service.generate_and_store_conflicts(
+            stations=stations,
+            count=count,
+            schedule_date=target_date,
+        )
+        
+        elapsed_ms = (time.time() - start_time) * 1000
+        
+        # Build response
+        response = {
+            "success": result.success,
+            "generated_count": result.conflicts_generated,
+            "schedule_based_count": result.schedule_based_count,
+            "synthetic_count": result.synthetic_count,
+            "stored_in_qdrant": result.conflicts_stored,
+            "embeddings_created": result.embeddings_created,
+            "stations_processed": result.stations_processed,
+            "errors": result.errors,
+            "generation_time_ms": elapsed_ms,
+            "timestamp": result.timestamp.isoformat(),
+            "summary": (
+                f"✅ Generated {result.conflicts_generated} conflicts "
+                f"({result.schedule_based_count} from real schedules, "
+                f"{result.synthetic_count} synthetic) "
+                f"from {len(result.stations_processed)} stations. "
+                f"{result.conflicts_stored} stored in Qdrant."
+            ) if result.success else f"❌ Generation failed with {len(result.errors)} errors",
+            "next_steps": [
+                "View conflicts: GET /api/v1/conflicts/",
+                "Get recommendations: POST /api/v1/recommendations/",
+                "View statistics: GET /api/v1/conflicts/transitland/stats",
+            ]
+        }
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Transitland conflict generation failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate conflicts from Transitland: {str(e)}"
+        )
+
+
+@router.get("/transitland/stats")
+async def get_transitland_stats():
+    """
+    Get statistics about Transitland conflict generation.
+    
+    Returns:
+        Service statistics including total runs, conflicts generated, etc.
+    """
+    try:
+        from app.services.transitland_client import TransitlandClient
+        
+        service = get_transitland_conflict_service()
+        stats = service.get_statistics()
+        
+        return {
+            "status": "active",
+            "statistics": stats,
+            "transitland_available_stations": list(TransitlandClient.UK_STATIONS.keys()),
+            "total_stations": len(TransitlandClient.UK_STATIONS),
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get Transitland stats: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get statistics: {str(e)}"
         )
 
 

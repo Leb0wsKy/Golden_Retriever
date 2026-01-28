@@ -11,10 +11,22 @@ from enum import Enum
 class ConflictType(str, Enum):
     """Types of rail conflicts that can occur."""
     
+    # Core conflict types
     PLATFORM_CONFLICT = "platform_conflict"     # Platform allocation conflict
     HEADWAY_CONFLICT = "headway_conflict"       # Minimum headway violation
     TRACK_BLOCKAGE = "track_blockage"           # Track occupation/blockage
     CAPACITY_OVERLOAD = "capacity_overload"     # Station/line capacity exceeded
+    
+    # New enhanced conflict types
+    SIGNAL_FAILURE = "signal_failure"           # Signal system malfunction
+    CREW_SHORTAGE = "crew_shortage"             # Insufficient crew availability
+    ROLLING_STOCK_FAILURE = "rolling_stock_failure"  # Train mechanical failure
+    WEATHER_DISRUPTION = "weather_disruption"   # Weather-related delays
+    TIMETABLE_CONFLICT = "timetable_conflict"   # Schedule synchronization issues
+    PASSENGER_INCIDENT = "passenger_incident"   # Passenger-related delays
+    INFRASTRUCTURE_WORK = "infrastructure_work" # Planned/unplanned maintenance
+    POWER_OUTAGE = "power_outage"               # Electrical supply issues
+    LEVEL_CROSSING_INCIDENT = "level_crossing_incident"  # Road-rail interface issues
 
 
 class ConflictSeverity(str, Enum):

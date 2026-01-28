@@ -929,69 +929,135 @@ class RecommendationEngine:
         confidence: float,
     ) -> str:
         """
-        Generate human-readable explanation for a recommendation.
+        Generate enhanced human-readable explanation for a recommendation.
         
         This is a key explainability feature - operators can understand
-        WHY this strategy is recommended in plain English.
+        WHY this strategy is recommended with detailed context.
         """
-        strategy_name = strategy.value.replace("_", " ")
+        strategy_name = strategy.value.replace("_", " ").title()
         parts = []
         
-        # Historical evidence explanation
+        # Strategy-specific context
+        strategy_context = self._get_strategy_context(strategy)
+        if strategy_context:
+            parts.append(f"**Why {strategy_name}?** {strategy_context}")
+        
+        # Historical evidence explanation with more detail
         if evidence_list:
             num_cases = len(evidence_list)
             success_pct = success_rate * 100
             
+            # Calculate average similarity
+            avg_similarity = sum(e.similarity for e in evidence_list) / num_cases if num_cases > 0 else 0
+            
             if success_rate >= 0.8:
                 parts.append(
-                    f"Historically highly effective: {strategy_name} succeeded in "
-                    f"{success_pct:.0f}% of {num_cases} similar cases."
+                    f"**Strong Historical Evidence**: {strategy_name} succeeded in "
+                    f"{success_pct:.0f}% of {num_cases} similar cases "
+                    f"(avg. similarity: {avg_similarity:.0%}). "
+                    f"This strategy has proven highly effective for this type of conflict."
                 )
             elif success_rate >= 0.6:
                 parts.append(
-                    f"Good historical track record: {strategy_name} succeeded in "
-                    f"{success_pct:.0f}% of {num_cases} similar cases."
+                    f"**Good Track Record**: {strategy_name} succeeded in "
+                    f"{success_pct:.0f}% of {num_cases} similar cases "
+                    f"(avg. similarity: {avg_similarity:.0%}). "
+                    f"Moderate risk with good historical outcomes."
                 )
             elif success_rate >= 0.4:
                 parts.append(
-                    f"Mixed historical results: {strategy_name} succeeded in "
-                    f"{success_pct:.0f}% of {num_cases} similar cases."
+                    f"**Mixed Results**: {strategy_name} succeeded in "
+                    f"{success_pct:.0f}% of {num_cases} similar cases "
+                    f"(avg. similarity: {avg_similarity:.0%}). "
+                    f"Consider alternative approaches or additional precautions."
                 )
             else:
                 parts.append(
-                    f"Limited historical success: {strategy_name} succeeded in only "
-                    f"{success_pct:.0f}% of {num_cases} similar cases."
+                    f"**Limited Success**: {strategy_name} succeeded in only "
+                    f"{success_pct:.0f}% of {num_cases} similar cases "
+                    f"(avg. similarity: {avg_similarity:.0%}). "
+                    f"High risk - may require escalation or combined strategies."
                 )
+            
+            # Add specific successful case example
+            if evidence_list and evidence_list[0].similarity > 0.75:
+                best_case = evidence_list[0]
+                parts.append(
+                    f"**Most Similar Case**: Conflict {best_case.conflict_id[:8]}... "
+                    f"({best_case.similarity:.0%} similar) resolved successfully using this strategy."
+                )
+                
         else:
             parts.append(
-                f"No directly similar historical cases found for {strategy_name}. "
-                f"Recommendation based primarily on simulation."
+                f"**No Historical Precedent**: No directly similar cases found for {strategy_name}. "
+                f"Recommendation based on simulation modeling and domain rules. "
+                f"Consider this as an experimental approach requiring close monitoring."
             )
         
-        # Simulation explanation
+        # Enhanced simulation explanation
         if sim_outcome:
             if sim_outcome.success:
                 parts.append(
-                    f"Simulation predicts success with {sim_outcome.delay_reduction} minutes "
-                    f"delay reduction and ~{sim_outcome.recovery_time} minutes to recovery."
+                    f"**Predicted Outcome**: Digital twin simulation forecasts **success** with "
+                    f"**{sim_outcome.delay_reduction} minutes** delay reduction. "
+                    f"Expected recovery time: **{sim_outcome.recovery_time} minutes**. "
+                    f"Simulation confidence: {sim_outcome.confidence:.0%}."
                 )
+                
+                # Add side effects warning if any
+                if sim_outcome.side_effects:
+                    side_effect_desc = ", ".join(
+                        f"{k}: {v}" for k, v in sim_outcome.side_effects.items()
+                    )
+                    parts.append(
+                        f"**Potential Side Effects**: {side_effect_desc}. "
+                        f"Monitor these factors during implementation."
+                    )
             else:
                 parts.append(
-                    f"Simulation predicts challenges, but still expects "
-                    f"{sim_outcome.delay_reduction} minutes delay reduction."
+                    f"**Simulation Warning**: Digital twin predicts **challenges**. "
+                    f"Still expects {sim_outcome.delay_reduction} minutes delay reduction, "
+                    f"but success not guaranteed. Consider backup strategies."
                 )
         
-        # Confidence note
-        if confidence < 0.5:
+        # Risk assessment based on confidence
+        if confidence < 0.4:
             parts.append(
-                "Note: Lower confidence due to limited similar cases or mixed evidence."
+                "⚠️ **High Risk**: Very low confidence due to limited data or conflicting evidence. "
+                "Recommend human oversight and fallback planning."
             )
-        elif confidence > 0.8:
+        elif confidence < 0.6:
             parts.append(
-                "High confidence based on strong historical evidence and simulation alignment."
+                "⚡ **Moderate Risk**: Lower confidence due to limited similar cases or mixed evidence. "
+                "Proceed with caution and monitor closely."
+            )
+        elif confidence > 0.85:
+            parts.append(
+                "✅ **High Confidence**: Strong alignment between historical evidence and simulation. "
+                "Reliable recommendation based on multiple data sources."
             )
         
         return " ".join(parts)
+    
+    def _get_strategy_context(self, strategy: ResolutionStrategy) -> str:
+        """Provide context-specific rationale for each strategy."""
+        context_map = {
+            ResolutionStrategy.PLATFORM_CHANGE: 
+                "Reassigning to an available platform prevents conflicts without affecting schedules or routes.",
+            ResolutionStrategy.REORDER: 
+                "Changing train priority/order optimizes throughput while minimizing overall delay.",
+            ResolutionStrategy.DELAY: 
+                "Adding strategic delays creates necessary gaps but may cascade to other services.",
+            ResolutionStrategy.REROUTE: 
+                "Alternative routing avoids the conflict zone but may affect journey time and connections.",
+            ResolutionStrategy.SPEED_ADJUSTMENT: 
+                "Modifying train speeds adjusts arrival timing without schedule changes.",
+            ResolutionStrategy.HOLD: 
+                "Temporarily holding trains prevents conflicts and allows situation assessment.",
+            ResolutionStrategy.CANCELLATION: 
+                "Last resort option that removes conflict source but significantly impacts passengers.",
+        }
+        return context_map.get(strategy, "")
     
     def _generate_summary(
         self,
