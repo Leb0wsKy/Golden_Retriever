@@ -5,6 +5,12 @@ const dotenv = require('dotenv');
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const axios = require('axios');
 
+// Import Qdrant modules
+const { qdrantClient: qdrantClientImport, QDRANT_CONFIG } = require('../qdrant/config');
+const { initializeAlertsCollection, getCollectionStats } = require('../qdrant/collections');
+const alertsService = require('../qdrant/alerts-service');
+const alertsGenerator = require('../qdrant/alerts-generator');
+
 dotenv.config();
 
 const app = express();
@@ -15,8 +21,8 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Qdrant Client
-const qdrantClient = new QdrantClient({
+// Use Qdrant client from config module (fallback to local for backward compatibility)
+const qdrantClient = qdrantClientImport || new QdrantClient({
   url: process.env.QDRANT_URL,
   apiKey: process.env.QDRANT_API_KEY,
 });
@@ -29,6 +35,16 @@ let systemStats = {
   uptime: '0h 0m',
   startTime: Date.now(),
 };
+
+// ============================================
+// ALERTS VECTOR DATABASE CONFIGURATION
+// ============================================
+const ALERTS_COLLECTION = QDRANT_CONFIG.ALERTS_COLLECTION;
+const VECTOR_DIMENSION = QDRANT_CONFIG.VECTOR_DIMENSION;
+
+
+// Initialize on startup
+initializeAlertsCollection();
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -174,6 +190,497 @@ app.get('/api/trains/live', async (req, res) => {
       message: error.message,
       details: error.response?.data 
     });
+  }
+});
+
+// ============================================
+// ALERTS VECTOR DATABASE ENDPOINTS
+// ============================================
+
+// Fetch and store alerts from Transitland API automatically
+app.post('/api/alerts/sync-from-transitland', async (req, res) => {
+  try {
+    const apiKey = process.env.TRANSITLAND_API_KEY;
+    
+    if (!apiKey || apiKey === 'your_transitland_api_key_here') {
+      return res.status(400).json({ error: 'Transitland API key not configured' });
+    }
+
+    console.log('🔄 Syncing alerts from Transitland API...');
+
+    // Fetch service alerts from Transitland
+    const alertsResponse = await axios.get(
+      `${process.env.TRANSITLAND_BASE_URL}/rest/alerts`,
+      {
+        headers: { 'apikey': apiKey },
+        params: { limit: 100 }
+      }
+    );
+
+    const alerts = alertsResponse.data.alerts || [];
+    console.log(`📥 Fetched ${alerts.length} alerts from Transitland`);
+
+    if (alerts.length === 0) {
+      return res.json({
+        message: 'No alerts available from Transitland API at this time',
+        stored: 0,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Transform and store alerts
+    const storedAlerts = [];
+    const errors = [];
+    let skipped = 0;
+
+    for (const alert of alerts) {
+      try {
+        const conflict = alert.header_text?.translation?.[0]?.text || 
+                         alert.description_text?.translation?.[0]?.text || 
+                         null;
+        
+        // Skip alerts without text
+        if (!conflict || conflict === 'Unknown alert') {
+          skipped++;
+          continue;
+        }
+
+        const conflictType = detectConflictType(conflict);
+        
+        // Determine severity from alert data
+        let severity = 'moderate';
+        if (alert.severity_level !== undefined) {
+          if (alert.severity_level <= 1) severity = 'minor';
+          else if (alert.severity_level >= 3) severity = 'severe';
+        }
+
+        // Generate embedding
+        let vector;
+        try {
+          const embeddingResponse = await axios.post(
+            `${process.env.AI_SERVICE_URL}/embed`,
+            { text: conflict },
+            { timeout: 5000 }
+          );
+          vector = embeddingResponse.data.vector;
+        } catch (embeddingError) {
+          console.log('⚠️ AI Service unavailable, using placeholder vector');
+          vector = Array(VECTOR_DIMENSION).fill(0).map(() => Math.random() - 0.5);
+        }
+
+        const alertId = alert.id || `transitland-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const solution = getSolution(conflictType, severity);
+
+        // Store in Qdrant
+        await qdrantClient.upsert(ALERTS_COLLECTION, {
+          wait: true,
+          points: [
+            {
+              id: alertId,
+              vector: vector,
+              payload: {
+                conflict: conflict,
+                conflictType: conflictType,
+                severity: severity,
+                solution: solution,
+                source: 'transitland',
+                affectedRoutes: alert.informed_entity?.map(e => e.route_id).filter(Boolean) || [],
+                affectedAgencies: alert.informed_entity?.map(e => e.agency_id).filter(Boolean) || [],
+                activePeriod: alert.active_period || [],
+                cause: alert.cause,
+                effect: alert.effect,
+                url: alert.url?.translation?.[0]?.text || null,
+                createdAt: new Date().toISOString()
+              }
+            }
+          ]
+        });
+
+        storedAlerts.push({
+          id: alertId,
+          conflict: conflict,
+          severity: severity
+        });
+
+        console.log(`✅ Stored: ${conflict.substring(0, 60)}...`);
+
+      } catch (alertError) {
+        console.error(`❌ Error storing alert:`, alertError.message);
+        errors.push({
+          alert: alert.header_text?.translation?.[0]?.text || 'Unknown',
+          error: alertError.message
+        });
+      }
+    }
+
+    console.log(`\n🎉 Sync complete! Stored: ${storedAlerts.length}, Skipped: ${skipped}, Errors: ${errors.length}\n`);
+
+    res.json({
+      success: true,
+      stored: storedAlerts.length,
+      skipped: skipped,
+      failed: errors.length,
+      storedAlerts: storedAlerts,
+      errors: errors,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error syncing alerts from Transitland:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to sync alerts from Transitland', 
+      message: error.message,
+      details: error.response?.data 
+    });
+  }
+});
+
+// Fetch alerts from Transitland API (view only, doesn't store)
+app.get('/api/alerts/fetch-from-transitland', async (req, res) => {
+  try {
+    const apiKey = process.env.TRANSITLAND_API_KEY;
+    
+    if (!apiKey || apiKey === 'your_transitland_api_key_here') {
+      return res.status(400).json({ error: 'Transitland API key not configured' });
+    }
+
+    // Fetch service alerts from Transitland
+    const alertsResponse = await axios.get(
+      `${process.env.TRANSITLAND_BASE_URL}/rest/alerts`,
+      {
+        headers: { 'apikey': apiKey },
+        params: { limit: 100 }
+      }
+    );
+
+    const alerts = alertsResponse.data.alerts || [];
+    console.log(`Fetched ${alerts.length} alerts from Transitland`);
+
+    // Transform alerts to our format
+    const transformedAlerts = alerts.map(alert => {
+      const conflict = alert.header_text?.translation?.[0]?.text || 
+                       alert.description_text?.translation?.[0]?.text || 
+                       'Unknown alert';
+      const conflictType = detectConflictType(conflict);
+      
+      // Determine severity from alert data or default to moderate
+      let severity = 'moderate';
+      if (alert.severity_level) {
+        if (alert.severity_level <= 1) severity = 'minor';
+        else if (alert.severity_level >= 3) severity = 'severe';
+      }
+
+      return {
+        id: alert.id || `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        conflict: conflict,
+        conflictType: conflictType,
+        severity: severity,
+        solution: getSolution(conflictType, severity),
+        source: 'transitland',
+        affectedRoutes: alert.informed_entity?.map(e => e.route_id).filter(Boolean) || [],
+        affectedAgencies: alert.informed_entity?.map(e => e.agency_id).filter(Boolean) || [],
+        activePeriod: alert.active_period || [],
+        createdAt: new Date().toISOString()
+      };
+    });
+
+    res.json({
+      alerts: transformedAlerts,
+      count: transformedAlerts.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error fetching alerts from Transitland:', error.message);
+    res.status(500).json({ error: 'Failed to fetch alerts', message: error.message });
+  }
+});
+
+// Generate alerts from live train data anomalies
+app.get('/api/alerts/detect-anomalies', async (req, res) => {
+  try {
+    const apiKey = process.env.TRANSITLAND_API_KEY;
+    
+    // Get live train data
+    const routesResponse = await axios.get(
+      `${process.env.TRANSITLAND_BASE_URL}/rest/routes`,
+      {
+        headers: { 'apikey': apiKey },
+        params: { route_type: 2, limit: 100, include_geometry: true }
+      }
+    );
+
+    const detectedAlerts = [];
+    const routes = routesResponse.data.routes || [];
+
+    // Simulate anomaly detection (in production, compare with historical data)
+    for (const route of routes) {
+      // Random chance of detecting an anomaly (for demo purposes)
+      if (Math.random() < 0.1) { // 10% chance per route
+        const anomalyTypes = ['delay', 'speed_restriction', 'congestion'];
+        const severities = ['minor', 'moderate', 'severe'];
+        
+        const conflictType = anomalyTypes[Math.floor(Math.random() * anomalyTypes.length)];
+        const severity = severities[Math.floor(Math.random() * severities.length)];
+        
+        const agencyName = route.agency?.agency_name || 'Unknown Agency';
+        const routeName = route.route_long_name || route.route_short_name || 'Unknown Route';
+        
+        const conflictMessages = {
+          'delay': `Train delay detected on ${routeName} (${agencyName}). Service running behind schedule.`,
+          'speed_restriction': `Speed restriction in effect on ${routeName} (${agencyName}).`,
+          'congestion': `High passenger volumes reported on ${routeName} (${agencyName}).`
+        };
+
+        detectedAlerts.push({
+          id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+          conflict: conflictMessages[conflictType],
+          conflictType: conflictType,
+          severity: severity,
+          solution: getSolution(conflictType, severity),
+          source: 'anomaly_detection',
+          affectedRoutes: [route.id],
+          affectedAgencies: [route.agency?.agency_id],
+          routeName: routeName,
+          agencyName: agencyName,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+
+    res.json({
+      alerts: detectedAlerts,
+      count: detectedAlerts.length,
+      analyzedRoutes: routes.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error detecting anomalies:', error.message);
+    res.status(500).json({ error: 'Failed to detect anomalies', message: error.message });
+  }
+});
+
+// Store alert in Qdrant vector database
+app.post('/api/alerts/store', async (req, res) => {
+  try {
+    const { conflict, severity, solution, conflictType, metadata } = req.body;
+
+    if (!conflict) {
+      return res.status(400).json({ error: 'Conflict description is required' });
+    }
+
+    const result = await alertsService.storeAlert({
+      conflict,
+      severity,
+      solution,
+      conflictType,
+      metadata,
+      source: 'manual'
+    });
+
+    res.json({
+      success: true,
+      alertId: result.id,
+      message: 'Alert stored in vector database',
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Error storing alert:', error.message);
+    res.status(500).json({ error: 'Failed to store alert', message: error.message });
+  }
+});
+
+// Batch store multiple alerts
+app.post('/api/alerts/store-batch', async (req, res) => {
+  try {
+    const { alerts } = req.body;
+
+    if (!alerts || !Array.isArray(alerts) || alerts.length === 0) {
+      return res.status(400).json({ error: 'Alerts array is required' });
+    }
+
+    const result = await alertsService.storeBatch(alerts);
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error batch storing alerts:', error.message);
+    res.status(500).json({ error: 'Failed to batch store alerts', message: error.message });
+  }
+});
+
+// Search for similar alerts (find golden run for new conflict)
+app.post('/api/alerts/search-similar', async (req, res) => {
+  try {
+    const { conflict, limit = 5 } = req.body;
+
+    if (!conflict) {
+      return res.status(400).json({ error: 'Conflict description is required' });
+    }
+
+    const result = await alertsService.searchSimilar(conflict, limit);
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error searching similar alerts:', error.message);
+    res.status(500).json({ error: 'Failed to search similar alerts', message: error.message });
+  }
+});
+
+// Get all stored alerts from Qdrant
+app.get('/api/alerts/stored', async (req, res) => {
+  try {
+    const { limit = 100, offset = 0 } = req.query;
+    const result = await alertsService.getAllAlerts(parseInt(limit), parseInt(offset));
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching stored alerts:', error.message);
+    res.status(500).json({ error: 'Failed to fetch stored alerts', message: error.message });
+  }
+});
+
+// Update alert solution (annotate golden run)
+app.put('/api/alerts/:alertId/solution', async (req, res) => {
+  try {
+    const { alertId } = req.params;
+    const { solution } = req.body;
+
+    if (!solution) {
+      return res.status(400).json({ error: 'Solution is required' });
+    }
+
+    const alertIdNumeric = parseInt(alertId);
+    const result = await alertsService.updateSolution(alertIdNumeric, solution);
+    
+    res.json({
+      ...result,
+      message: 'Alert solution updated (golden run annotated)',
+      newSolution: solution
+    });
+
+  } catch (error) {
+    console.error('Error updating alert solution:', error.message);
+    res.status(500).json({ error: 'Failed to update alert solution', message: error.message });
+  }
+});
+
+// Delete alert from Qdrant
+app.delete('/api/alerts/:alertId', async (req, res) => {
+  try {
+    const { alertId } = req.params;
+    const alertIdNumeric = parseInt(alertId);
+    
+    const result = await alertsService.deleteAlert(alertIdNumeric);
+    res.json({
+      ...result,
+      message: 'Alert deleted from vector database',
+      alertId: alertId
+    });
+
+  } catch (error) {
+    console.error('Error deleting alert:', error.message);
+    res.status(500).json({ error: 'Failed to delete alert', message: error.message });
+  }
+});
+
+// Get alert collection stats
+app.get('/api/alerts/stats', async (req, res) => {
+  try {
+    const stats = await getCollectionStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching alert stats:', error.message);
+    res.status(500).json({ error: 'Failed to fetch alert stats', message: error.message });
+  }
+});
+
+// Cache for train data and alerts
+let alertsCache = {
+  alerts: [],
+  timestamp: 0,
+  trainsAnalyzed: 0,
+  stats: null
+};
+const ALERTS_CACHE_TTL = 30000; // 30 seconds cache
+
+// Get live alerts from current train data
+app.get('/api/alerts/live', async (req, res) => {
+  try {
+    // Check cache first
+    const cacheAge = Date.now() - alertsCache.timestamp;
+    if (cacheAge < ALERTS_CACHE_TTL && alertsCache.alerts.length > 0) {
+      console.log('Serving alerts from cache (age: ' + Math.floor(cacheAge / 1000) + 's)');
+      const { severity = 'minor', maxAge = 3600000, limit = 50 } = req.query;
+      const filteredAlerts = alertsGenerator.filterAlerts(alertsCache.alerts, {
+        minSeverity: severity,
+        maxAge: parseInt(maxAge),
+        limit: parseInt(limit)
+      });
+      
+      return res.json({
+        alerts: filteredAlerts,
+        stats: alertsCache.stats,
+        trainsAnalyzed: alertsCache.trainsAnalyzed,
+        timestamp: new Date(alertsCache.timestamp).toISOString(),
+        cached: true,
+        cacheAge: Math.floor(cacheAge / 1000)
+      });
+    }
+    
+    console.log('Generating fresh alerts...');
+    // Fetch current train data
+    const trainsResponse = await axios.get('http://localhost:5000/api/trains/live');
+    const networks = trainsResponse.data.networks || [];
+    
+    // Extract all trains from all networks
+    const allTrains = networks.flatMap(network => network.trains);
+    const allRoutes = networks.flatMap(network => network.routes);
+    
+    // Generate alerts from train data
+    const generatedAlerts = await alertsGenerator.generateAlertsFromTrains(allTrains, allRoutes);
+    
+    // Filter alerts based on query parameters
+    const { severity = 'minor', maxAge = 3600000, limit = 50 } = req.query;
+    const filteredAlerts = alertsGenerator.filterAlerts(generatedAlerts, {
+      minSeverity: severity,
+      maxAge: parseInt(maxAge),
+      limit: parseInt(limit)
+    });
+    
+    // Calculate statistics
+    const stats = {
+      total: generatedAlerts.length,
+      displayed: filteredAlerts.length,
+      bySeverity: {
+        severe: generatedAlerts.filter(a => a.severity === 'severe').length,
+        moderate: generatedAlerts.filter(a => a.severity === 'moderate').length,
+        minor: generatedAlerts.filter(a => a.severity === 'minor').length,
+      },
+      withAI: generatedAlerts.filter(a => a.usingAI).length,
+      avgConfidence: generatedAlerts.reduce((sum, a) => sum + a.confidence, 0) / (generatedAlerts.length || 1),
+    };
+    
+    // Update cache
+    alertsCache = {
+      alerts: generatedAlerts,
+      timestamp: Date.now(),
+      trainsAnalyzed: allTrains.length,
+      stats: stats
+    };
+    console.log(`Generated ${generatedAlerts.length} alerts (severe: ${stats.bySeverity.severe}, moderate: ${stats.bySeverity.moderate}, minor: ${stats.bySeverity.minor})`);
+    
+    res.json({
+      alerts: filteredAlerts,
+      stats: stats,
+      trainsAnalyzed: allTrains.length,
+      timestamp: new Date().toISOString(),
+      cached: false
+    });
+    
+  } catch (error) {
+    console.error('Error generating live alerts:', error.message);
+    res.status(500).json({ error: 'Failed to generate live alerts', message: error.message });
   }
 });
 

@@ -9,7 +9,10 @@ import {
   Alert,
   Divider,
 } from '@mui/material';
-import { Save as SaveIcon } from '@mui/icons-material';
+import { 
+  Save as SaveIcon,
+  Settings as SettingsIcon,
+} from '@mui/icons-material';
 import axios from 'axios';
 
 function Settings() {
@@ -52,19 +55,33 @@ function Settings() {
   };
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Settings
-      </Typography>
+    <Box sx={{ 
+      bgcolor: '#f8f9fa', 
+      minHeight: '100vh', 
+      p: { xs: 2, md: 4 },
+      background: 'linear-gradient(180deg, #e3f2fd 0%, #f8f9fa 100%)'
+    }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+        <SettingsIcon sx={{ mr: 1.5, fontSize: 40, color: '#0891b2' }} />
+        <Typography variant="h4" sx={{ fontWeight: 800, color: '#1e40af' }}>
+          Settings
+        </Typography>
+      </Box>
 
       {saveStatus && (
-        <Alert severity={saveStatus.type} sx={{ mb: 3 }}>
+        <Alert severity={saveStatus.type} sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
           {saveStatus.message}
         </Alert>
       )}
 
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
+      <Paper sx={{ 
+        p: 3,
+        bgcolor: 'white',
+        borderRadius: 3,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+        border: '1px solid rgba(0,0,0,0.05)'
+      }}>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#1e40af', mb: 3 }}>
           Qdrant Configuration
         </Typography>
         <Grid container spacing={3}>
@@ -107,7 +124,7 @@ function Settings() {
 
         <Divider sx={{ my: 3 }} />
 
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#1e40af', mb: 3 }}>
           Connection Settings
         </Typography>
         <Grid container spacing={3}>
@@ -137,6 +154,15 @@ function Settings() {
             startIcon={<SaveIcon />}
             onClick={handleSave}
             size="large"
+            sx={{
+              background: 'linear-gradient(135deg, #1e40af 0%, #0891b2 100%)',
+              fontWeight: 600,
+              px: 4,
+              py: 1.5,
+              '&:hover': {
+                background: 'linear-gradient(135deg, #1e3a8a 0%, #0e7490 100%)',
+              }
+            }}
           >
             Save Settings
           </Button>

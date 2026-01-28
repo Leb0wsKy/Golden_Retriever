@@ -1,0 +1,33 @@
+{
+  "backend_url": "http://localhost:5000",
+  "endpoint": "/api/trains/live",
+  "transitland": {
+    "base_url": "https://transit.land/api/v2",
+    "endpoint": "/rest/vehicles",
+    "schedule_stop_pairs_endpoint": "/rest/schedule_stop_pairs"
+  },
+  "labeling": {
+    "delay_high_minutes": 5,
+    "speed_high_kmh": 90,
+    "speed_low_kmh": 10,
+    "conflict_proximity_km": 1.0,
+    "conflict_congestion_count": 3
+  },
+  "schedule_conflicts": {
+    "platform_window_minutes": 5,
+    "headway_min_minutes": 3,
+    "service_gap_minutes": 20,
+    "capacity_window_minutes": 10,
+    "capacity_threshold_trips": 5,
+    "delay_propagation_minutes": 5,
+    "transfer_min_minutes": 3,
+    "transfer_max_minutes": 15,
+    "schedule_coverage_ratio_min": 0.7
+  },
+  "network_conflicts": {
+    "min_conflict_trains": 2,
+    "delay_high_minutes": 5,
+    "anomaly_ratio_threshold": 0.3,
+    "conflict_ratio_threshold": 0.2
+  }
+}
