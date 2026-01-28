@@ -30,6 +30,7 @@ from functools import lru_cache
 import logging
 
 import numpy as np
+import httpx
 
 from app.core.config import settings
 from app.core.exceptions import EmbeddingServiceError
@@ -198,6 +199,8 @@ class EmbeddingService:
         """
         Generate an embedding for a single text string.
         
+        First attempts to use AI Service if enabled, falls back to local model.
+        
         Converts the input text into a dense vector representation that
         captures its semantic meaning. Similar texts will have similar
         embeddings (high cosine similarity).
@@ -219,22 +222,95 @@ class EmbeddingService:
             >>> len(vec)
             384
         """
+        # Try AI Service first if enabled
+        if settings.AI_SERVICE_ENABLED and settings.AI_SERVICE_URL:
+            try:
+                return self._embed_via_ai_service(text)
+            except Exception as e:
+                logger.warning(
+                    f"AI Service unavailable, using local model: {e}",
+                    extra={"ai_service_url": settings.AI_SERVICE_URL}
+                )
+        
+        # Fallback to local embedding generation
+        return self._embed_local(text)
+    
+    def _embed_via_ai_service(self, text: str) -> List[float]:
+        """
+        Generate embedding via AI Service HTTP API.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Embedding vector as list of floats
+            
+        Raises:
+            Exception: If AI Service request fails
+        """
+        try:
+            with httpx.Client(timeout=settings.AI_SERVICE_TIMEOUT) as client:
+                response = client.post(
+                    f"{settings.AI_SERVICE_URL}/embed",
+                    json={"text": text}
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                logger.debug(
+                    "Generated embedding via AI Service",
+                    extra={
+                        "text_length": len(text),
+                        "dimension": result.get("dimension")
+                    }
+                )
+                
+                return result["vector"]
+                
+        except httpx.TimeoutException as e:
+            raise Exception(f"AI Service timeout after {settings.AI_SERVICE_TIMEOUT}s") from e
+        except httpx.HTTPStatusError as e:
+            raise Exception(f"AI Service HTTP error: {e.response.status_code}") from e
+        except (httpx.RequestError, KeyError) as e:
+            raise Exception(f"AI Service request failed: {e}") from e
+    
+    def _embed_local(self, text: str) -> List[float]:
+        """
+        Generate embedding using local sentence-transformers model.
+        
+        This is the fallback method when AI Service is unavailable.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Embedding vector as list of floats
+            
+        Raises:
+            EmbeddingServiceError: If local embedding fails
+        """
         try:
             embedding = self.model.encode(
                 text,
                 convert_to_numpy=True,
                 normalize_embeddings=True  # L2 normalize for cosine similarity
             )
+            logger.debug(
+                "Generated embedding via local model",
+                extra={"text_length": len(text)}
+            )
             return embedding.tolist()
         except Exception as e:
             raise EmbeddingServiceError(
-                "Failed to generate embedding",
+                "Failed to generate embedding (local model)",
                 {"error": str(e), "text_length": len(text)}
             )
     
     def embed_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
         """
         Generate embeddings for multiple texts efficiently.
+        
+        First attempts to use AI Service if enabled, falls back to local model.
         
         Batch processing is significantly faster than calling embed() in a loop
         because it:
@@ -266,6 +342,69 @@ class EmbeddingService:
         if not texts:
             return []
         
+        # Try AI Service first if enabled
+        if settings.AI_SERVICE_ENABLED and settings.AI_SERVICE_URL:
+            try:
+                return self._embed_batch_via_ai_service(texts)
+            except Exception as e:
+                logger.warning(
+                    f"AI Service batch embedding unavailable, using local model: {e}",
+                    extra={"ai_service_url": settings.AI_SERVICE_URL, "text_count": len(texts)}
+                )
+        
+        # Fallback to local batch embedding
+        return self._embed_batch_local(texts, batch_size)
+    
+    def _embed_batch_via_ai_service(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate batch embeddings via AI Service HTTP API.
+        
+        Args:
+            texts: List of texts to embed
+            
+        Returns:
+            List of embedding vectors
+            
+        Raises:
+            Exception: If AI Service request fails
+        """
+        try:
+            with httpx.Client(timeout=max(settings.AI_SERVICE_TIMEOUT * 2, 30)) as client:
+                response = client.post(
+                    f"{settings.AI_SERVICE_URL}/embed_batch",
+                    json={"texts": texts}
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                logger.debug(
+                    "Generated batch embeddings via AI Service",
+                    extra={"text_count": len(texts), "dimension": result.get("dimension")}
+                )
+                
+                return result["vectors"]
+                
+        except httpx.TimeoutException as e:
+            raise Exception(f"AI Service batch timeout") from e
+        except httpx.HTTPStatusError as e:
+            raise Exception(f"AI Service HTTP error: {e.response.status_code}") from e
+        except (httpx.RequestError, KeyError) as e:
+            raise Exception(f"AI Service batch request failed: {e}") from e
+    
+    def _embed_batch_local(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
+        """
+        Generate batch embeddings using local model.
+        
+        Args:
+            texts: List of texts to embed
+            batch_size: Batch size for processing
+            
+        Returns:
+            List of embedding vectors
+            
+        Raises:
+            EmbeddingServiceError: If local embedding fails
+        """
         try:
             embeddings = self.model.encode(
                 texts,

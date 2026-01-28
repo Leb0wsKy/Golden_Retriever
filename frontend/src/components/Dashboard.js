@@ -24,6 +24,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
+import PreConflictAlerts from './PreConflictAlerts';
 
 // Fix for default marker icons in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -233,6 +234,11 @@ function Dashboard({ stats }) {
             </Card>
           </Grid>
         ))}
+
+        {/* Pre-Conflict Alerts Panel */}
+        <Grid item xs={12} md={4}>
+          <PreConflictAlerts />
+        </Grid>
 
         {/* Map Section */}
         <Grid item xs={12} md={8}>

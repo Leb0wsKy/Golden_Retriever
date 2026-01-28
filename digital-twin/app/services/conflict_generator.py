@@ -377,6 +377,11 @@ class ConflictGenerator:
             description, metadata = self._generate_capacity_overload_details(
                 station, affected_trains, time_of_day
             )
+        else:
+            # Handle all other conflict types (signal_failure, crew_shortage, etc.)
+            description, metadata = self._generate_generic_conflict_details(
+                conflict_type, station, affected_trains, time_of_day, severity
+            )
         
         # Generate resolution and outcome
         recommended_resolution = self._generate_resolution(

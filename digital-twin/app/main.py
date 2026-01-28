@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Background task for periodic Transitland conflict generation
 _background_task: asyncio.Task = None
+_pre_conflict_scan_task: asyncio.Task = None  # NEW: Pre-conflict scanning task
 _should_run_background = True
 
 
@@ -66,6 +67,60 @@ async def periodic_transitland_conflict_generation():
         await asyncio.sleep(1800)
 
 
+async def periodic_pre_conflict_scanning():
+    """
+    Background task for predictive conflict detection.
+    
+    This runs every 10 minutes and:
+    1. Captures current network state
+    2. Searches pre-conflict memory for similar historical patterns
+    3. Identifies patterns that previously led to conflicts
+    4. Generates preventive alerts for operators
+    
+    This implements the proposal requirement for "predictive capability
+    that identifies conflicts before they materialize."
+    """
+    from app.services.pre_conflict_scanner import get_pre_conflict_scanner
+    
+    # Wait 90 seconds after startup before first scan
+    await asyncio.sleep(90)
+    
+    while _should_run_background:
+        try:
+            logger.info("🔍 Starting periodic pre-conflict pattern scan...")
+            
+            scanner = get_pre_conflict_scanner()
+            result = await scanner.scan_for_emerging_conflicts()
+            
+            if result.success:
+                if result.alerts_generated > 0:
+                    logger.warning(
+                        f"⚠️ PREVENTIVE ALERTS: {result.alerts_generated} emerging "
+                        f"conflicts detected from {result.patterns_checked} patterns"
+                    )
+                    for alert in result.alerts:
+                        logger.warning(
+                            f"   Alert: {alert.predicted_conflict_type.value} at "
+                            f"{alert.predicted_location} in ~{alert.time_to_conflict_minutes}min "
+                            f"(confidence: {alert.confidence:.0%})"
+                        )
+                else:
+                    logger.info(
+                        f"✅ No emerging conflicts detected "
+                        f"({result.patterns_checked} patterns checked)"
+                    )
+            else:
+                logger.warning(
+                    f"⚠️ Pre-conflict scan had errors: {result.errors}"
+                )
+            
+        except Exception as e:
+            logger.error(f"Background pre-conflict scan failed: {e}", exc_info=True)
+        
+        # Wait 10 minutes before next scan (600 seconds)
+        await asyncio.sleep(600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -76,7 +131,7 @@ async def lifespan(app: FastAPI):
     - Background task management
     - Cleanup on shutdown
     """
-    global _background_task, _should_run_background
+    global _background_task, _pre_conflict_scan_task, _should_run_background
     
     # Startup
     logger.info("🚀 Starting Golden Retriever Digital Twin...")
@@ -110,6 +165,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"⚠️ Failed to start background task: {e}")
     
+    # Start background pre-conflict scanning task (NEW)
+    try:
+        _pre_conflict_scan_task = asyncio.create_task(periodic_pre_conflict_scanning())
+        logger.info("✅ Background pre-conflict scanning started (runs every 10 min)")
+    except Exception as e:
+        logger.error(f"⚠️ Failed to start pre-conflict scanner: {e}")
+    
     logger.info("✅ Digital Twin ready!")
     
     yield
@@ -117,15 +179,24 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("🛑 Shutting down Digital Twin...")
     
-    # Stop background task
+    # Stop background tasks
     _should_run_background = False
+    
     if _background_task:
         _background_task.cancel()
         try:
             await _background_task
         except asyncio.CancelledError:
             pass
-        logger.info("✅ Background task stopped")
+        logger.info("✅ Conflict generation task stopped")
+    
+    if _pre_conflict_scan_task:
+        _pre_conflict_scan_task.cancel()
+        try:
+            await _pre_conflict_scan_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✅ Pre-conflict scanning task stopped")
     
     logger.info("✅ Shutdown complete")
 
@@ -164,7 +235,10 @@ def create_app() -> FastAPI:
         return {
             "status": "healthy",
             "version": settings.APP_VERSION,
-            "background_task_running": _background_task is not None and not _background_task.done()
+            "background_tasks": {
+                "conflict_generation": _background_task is not None and not _background_task.done(),
+                "pre_conflict_scanning": _pre_conflict_scan_task is not None and not _pre_conflict_scan_task.done()
+            }
         }
 
     return app

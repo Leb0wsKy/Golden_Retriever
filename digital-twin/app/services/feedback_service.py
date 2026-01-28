@@ -820,7 +820,6 @@ class FeedbackLoopService:
                 "delay_reduction_percentage": golden_run.delay_reduction_percentage,
                 
                 # Golden run metadata
-                "is_golden_run": True,
                 "golden_run_id": golden_run.id,
                 "is_golden": golden_run.is_golden,
                 "verified_at": golden_run.verified_at.isoformat(),
@@ -831,26 +830,21 @@ class FeedbackLoopService:
                 "has_verified_outcome": True,
             }
             
-            # Store in Qdrant
-            # Using a method that accepts dict payload directly
-            from qdrant_client.models import PointStruct
+            # Store in Qdrant with boost weight for verified outcomes
+            boost_weight = 2.0 if golden_run.is_golden else 1.5
             
-            point_id = golden_run.id
-            
-            self.qdrant_service.ensure_collections()
-            self.qdrant_service.client.upsert(
-                collection_name="conflict_memory",
-                points=[
-                    PointStruct(
-                        id=point_id,
-                        vector=embedding,
-                        payload=payload,
-                    )
-                ]
+            result = self.qdrant_service.upsert_golden_run(
+                golden_run_id=golden_run.id,
+                embedding=embedding,
+                payload=payload,
+                boost_weight=boost_weight,
             )
             
-            logger.info(f"Stored golden run {golden_run.id} in Qdrant")
-            return True
+            logger.info(
+                f"Stored golden run {golden_run.id} in Qdrant "
+                f"(boost_weight={boost_weight})"
+            )
+            return result.success
             
         except Exception as e:
             logger.warning(f"Failed to store golden run in Qdrant: {e}")

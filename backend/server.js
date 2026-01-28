@@ -5,11 +5,8 @@ const dotenv = require('dotenv');
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const axios = require('axios');
 
-// Import Qdrant modules
-const { qdrantClient: qdrantClientImport, QDRANT_CONFIG } = require('../qdrant/config');
-const { initializeAlertsCollection, getCollectionStats } = require('../qdrant/collections');
-const alertsService = require('../qdrant/alerts-service');
-const alertsGenerator = require('../qdrant/alerts-generator');
+// Note: Legacy Qdrant modules for deprecated alerts system (lines 197-699) are no longer imported
+// Digital Twin service now handles all conflict/alert management via proxy endpoints
 
 dotenv.config();
 
@@ -21,8 +18,9 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Use Qdrant client from config module (fallback to local for backward compatibility)
-const qdrantClient = qdrantClientImport || new QdrantClient({
+// Qdrant client for direct database access (if needed)
+// Note: Most operations now go through Digital Twin proxy endpoints
+const qdrantClient = new QdrantClient({
   url: process.env.QDRANT_URL,
   apiKey: process.env.QDRANT_API_KEY,
 });
@@ -36,15 +34,8 @@ let systemStats = {
   startTime: Date.now(),
 };
 
-// ============================================
-// ALERTS VECTOR DATABASE CONFIGURATION
-// ============================================
-const ALERTS_COLLECTION = QDRANT_CONFIG.ALERTS_COLLECTION;
-const VECTOR_DIMENSION = QDRANT_CONFIG.VECTOR_DIMENSION;
-
-
-// Initialize on startup
-initializeAlertsCollection();
+// Note: ALERTS_COLLECTION and initialization removed - Digital Twin manages collections
+// Legacy alerts system (lines 197-699) has been deprecated
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -194,10 +185,23 @@ app.get('/api/trains/live', async (req, res) => {
 });
 
 // ============================================
-// ALERTS VECTOR DATABASE ENDPOINTS
+// DEPRECATED: ALERTS VECTOR DATABASE ENDPOINTS
+// ============================================
+// These endpoints are DEPRECATED and replaced by Digital Twin service
+// The Digital Twin service now handles:
+// - Conflict generation and management
+// - Transitland integration
+// - Vector embeddings via AI service
+// - Feedback loop and learning
+//
+// Use these Digital Twin endpoints instead:
+// - POST /api/digital-twin/conflicts/generate-from-schedules (replaces sync-from-transitland)
+// - GET /api/digital-twin/conflicts (replaces /api/alerts)
+// - GET /api/digital-twin/conflicts/transitland/stats (replaces stats)
+// - POST /api/digital-twin/recommendations (replaces vector search)
 // ============================================
 
-// Fetch and store alerts from Transitland API automatically
+/* DEPRECATED - Use Digital Twin service instead
 app.post('/api/alerts/sync-from-transitland', async (req, res) => {
   try {
     const apiKey = process.env.TRANSITLAND_API_KEY;
@@ -683,8 +687,9 @@ app.get('/api/alerts/live', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate live alerts', message: error.message });
   }
 });
+*/  // End of DEPRECATED alerts endpoints
 
-// Get Stats
+// Get Stats (kept for system health monitoring)
 app.get('/api/stats', async (req, res) => {
   try {
     const collections = await qdrantClient.getCollections();
@@ -903,36 +908,155 @@ app.post('/api/ai/predict', async (req, res) => {
   }
 });
 
-// Digital Twin Routes (proxy to FastAPI service)
+// ============================================
+// DIGITAL TWIN ROUTES (FastAPI Proxy)
+// ============================================
+
 // Health check for digital twin service
 app.get('/api/digital-twin/health', async (req, res) => {
   try {
-    const response = await axios.get(`${process.env.DIGITAL_TWIN_URL}/health`);
+    const response = await axios.get(`${process.env.DIGITAL_TWIN_URL}/health`, { timeout: 5000 });
     res.json(response.data);
   } catch (error) {
-    console.error('Error fetching digital twin health:', error);
-    res.status(500).json({ error: 'Digital twin service unavailable' });
+    console.error('Error fetching digital twin health:', error.message);
+    res.status(503).json({ 
+      error: 'Digital twin service unavailable',
+      service: 'digital-twin',
+      url: process.env.DIGITAL_TWIN_URL
+    });
   }
 });
 
-// Generate conflicts
+// ============================================
+// CONFLICT MANAGEMENT ENDPOINTS
+// ============================================
+
+// List all conflicts
+app.get('/api/digital-twin/conflicts', async (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/`,
+      { params: { limit, offset } }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching conflicts:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch conflicts',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Get specific conflict by ID
+app.get('/api/digital-twin/conflicts/:conflictId', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/${req.params.conflictId}`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching conflict:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch conflict',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Generate synthetic conflicts
 app.post('/api/digital-twin/conflicts/generate', async (req, res) => {
   try {
     const response = await axios.post(
       `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/generate`,
-      req.body
+      req.body,
+      { timeout: 30000 }
     );
     res.json(response.data);
   } catch (error) {
-    console.error('Error generating conflicts:', error);
-    res.status(500).json({ 
+    console.error('Error generating conflicts:', error.message);
+    res.status(error.response?.status || 500).json({ 
       error: 'Failed to generate conflicts',
       message: error.response?.data?.detail || error.message 
     });
   }
 });
 
+// Generate conflicts from Transitland schedules
+app.post('/api/digital-twin/conflicts/generate-from-schedules', async (req, res) => {
+  try {
+    const response = await axios.post(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/generate-from-schedules`,
+      req.body,
+      { timeout: 60000 }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error generating conflicts from schedules:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to generate conflicts from schedules',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Get Transitland integration statistics
+app.get('/api/digital-twin/conflicts/transitland/stats', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/transitland/stats`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching Transitland stats:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch Transitland stats',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Analyze specific conflict
+app.post('/api/digital-twin/conflicts/analyze', async (req, res) => {
+  try {
+    const response = await axios.post(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/analyze`,
+      req.body
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error analyzing conflict:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to analyze conflict',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
 // Get recommendations for a conflict
+app.get('/api/digital-twin/conflicts/:conflictId/recommendations', async (req, res) => {
+  try {
+    const { top_k = 5 } = req.query;
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/conflicts/${req.params.conflictId}/recommendations`,
+      { params: { top_k } }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error getting conflict recommendations:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to get recommendations',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// ============================================
+// RECOMMENDATION ENDPOINTS
+// ============================================
+
+// Quick recommendation (POST with conflict data)
 app.post('/api/digital-twin/recommendations', async (req, res) => {
   try {
     const response = await axios.post(
@@ -941,8 +1065,8 @@ app.post('/api/digital-twin/recommendations', async (req, res) => {
     );
     res.json(response.data);
   } catch (error) {
-    console.error('Error getting recommendations:', error);
-    res.status(500).json({ 
+    console.error('Error getting recommendations:', error.message);
+    res.status(error.response?.status || 500).json({ 
       error: 'Failed to get recommendations',
       message: error.response?.data?.detail || error.message 
     });
@@ -958,57 +1082,130 @@ app.post('/api/digital-twin/recommendations/feedback', async (req, res) => {
     );
     res.json(response.data);
   } catch (error) {
-    console.error('Error submitting feedback:', error);
-    res.status(500).json({ 
+    console.error('Error submitting feedback:', error.message);
+    res.status(error.response?.status || 500).json({ 
       error: 'Failed to submit feedback',
       message: error.response?.data?.detail || error.message 
     });
   }
 });
 
-// Get learning metrics
-app.get('/api/digital-twin/metrics/learning', async (req, res) => {
+// Get all feedback records
+app.get('/api/digital-twin/recommendations/feedback', async (req, res) => {
   try {
+    const { limit = 50, offset = 0 } = req.query;
     const response = await axios.get(
-      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/metrics/learning`
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/feedback`,
+      { params: { limit, offset } }
     );
     res.json(response.data);
   } catch (error) {
-    console.error('Error fetching learning metrics:', error);
-    res.status(500).json({ 
+    console.error('Error fetching feedback records:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch feedback records',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Get specific feedback by ID
+app.get('/api/digital-twin/recommendations/feedback/:feedbackId', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/feedback/${req.params.feedbackId}`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching feedback:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch feedback',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// ============================================
+// LEARNING & METRICS ENDPOINTS
+// ============================================
+
+// Get learning metrics (FIXED: was /metrics/learning, now /metrics)
+app.get('/api/digital-twin/recommendations/metrics', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/metrics`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching learning metrics:', error.message);
+    res.status(error.response?.status || 500).json({ 
       error: 'Failed to fetch learning metrics',
       message: error.response?.data?.detail || error.message 
     });
   }
 });
 
-// Legacy data endpoint for backward compatibility
-app.get('/api/digital-twin/data', async (req, res) => {
+// Get metrics for specific strategy
+app.get('/api/digital-twin/recommendations/metrics/strategy/:strategy', async (req, res) => {
   try {
-    // Return mock data or redirect to new metrics endpoint
-    res.json({
-      timestamp: new Date().toISOString(),
-      status: 'active',
-      message: 'Use /api/digital-twin/metrics/learning for detailed metrics'
-    });
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/metrics/strategy/${req.params.strategy}`
+    );
+    res.json(response.data);
   } catch (error) {
-    console.error('Error fetching digital twin data:', error);
-    res.json({
-      timestamp: new Date().toISOString(),
-      accuracy: Math.random(),
-      latency: Math.random() * 100,
-      throughput: Math.random() * 1000,
-      metrics: {
-        accuracy: Math.random(),
-        latency: Math.random() * 100,
-        throughput: Math.random() * 1000,
-      },
+    console.error('Error fetching strategy metrics:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch strategy metrics',
+      message: error.response?.data?.detail || error.message 
     });
   }
 });
 
-// Simulation is now embedded in recommendation process
-// These endpoints are deprecated but kept for backward compatibility
+// ============================================
+// GOLDEN RUN ENDPOINTS
+// ============================================
+
+// List golden runs (verified successful resolutions)
+app.get('/api/digital-twin/recommendations/golden-runs', async (req, res) => {
+  try {
+    const { limit = 50, offset = 0, strategy } = req.query;
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/golden-runs`,
+      { params: { limit, offset, strategy } }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching golden runs:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch golden runs',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Get specific golden run by ID
+app.get('/api/digital-twin/recommendations/golden-runs/:goldenRunId', async (req, res) => {
+  try {
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/recommendations/golden-runs/${req.params.goldenRunId}`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching golden run:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch golden run',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// ============================================
+// DEPRECATED ENDPOINTS (Kept for compatibility)
+// ============================================
+
+// Legacy: Simulation start/stop/reset are deprecated
+// The Digital Twin now uses event-driven architecture
+
+/* DEPRECATED - Simulation is now event-driven
 app.post('/api/digital-twin/start', async (req, res) => {
   res.json({ 
     success: true, 
@@ -1028,6 +1225,16 @@ app.post('/api/digital-twin/reset', async (req, res) => {
   res.json({ 
     success: true, 
     message: 'No persistent state to reset. Each request is independent.'
+  });
+});
+*/
+
+// Legacy data endpoint - redirects to metrics
+app.get('/api/digital-twin/data', async (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    status: 'active',
+    message: 'Use /api/digital-twin/recommendations/metrics for learning metrics'
   });
 });
 

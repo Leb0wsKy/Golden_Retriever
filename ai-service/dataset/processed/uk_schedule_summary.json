@@ -1,0 +1,89 @@
+{
+  "collection_date": "2026-01-28T15:12:11.138827",
+  "service_date": "2026-01-28",
+  "stations_requested": 16,
+  "stations_successful": 0,
+  "total_departures": 0,
+  "stations": {
+    "London Euston": {
+      "station_id": "s-gcpvj-londoneuston",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "London Kings Cross": {
+      "station_id": "s-gcpvj-londonkingscross",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "London St Pancras": {
+      "station_id": "s-gcpvj-londonstpancras",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "London Paddington": {
+      "station_id": "s-gcpv-londonpaddington",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "London Waterloo": {
+      "station_id": "s-gcpu-londonwaterloo",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "London Victoria": {
+      "station_id": "s-gcpu-londonvictoria",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "London Liverpool Street": {
+      "station_id": "s-gcpw-londonliverpoolstreet",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Birmingham New Street": {
+      "station_id": "s-gcqd-birminghamnewstreet",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Manchester Piccadilly": {
+      "station_id": "s-gcw2-manchesterpiccadilly",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Edinburgh Waverley": {
+      "station_id": "s-gcp6-edinburghwaverley",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Glasgow Central": {
+      "station_id": "s-gckx-glasgowcentral",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Leeds": {
+      "station_id": "s-gcse-leeds",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Liverpool Lime Street": {
+      "station_id": "s-gcmv-liverpoollimestreet",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Bristol Temple Meads": {
+      "station_id": "s-gbz-bristoltemplemeads",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "Newcastle": {
+      "station_id": "s-gcp7-newcastlecentral",
+      "departures": 0,
+      "status": "no_data"
+    },
+    "York": {
+      "station_id": "s-gcx6-york",
+      "departures": 0,
+      "status": "no_data"
+    }
+  }
+}

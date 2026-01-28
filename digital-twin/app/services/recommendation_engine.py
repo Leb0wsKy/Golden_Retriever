@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import httpx
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass, field
@@ -656,6 +657,10 @@ class RecommendationEngine:
                 outcome = ResolutionOutcome.PARTIAL_SUCCESS
             
             # Build evidence record
+            # Calculate delay reduction, ensuring non-negative value
+            delay_reduction = match.delay_before - (match.actual_delay_after or match.delay_before)
+            delay_reduction = max(0, delay_reduction)  # Ensure non-negative
+            
             evidence = HistoricalEvidence(
                 conflict_id=match.id,
                 similarity_score=match.score,
@@ -663,7 +668,7 @@ class RecommendationEngine:
                 timestamp=match.detected_at,
                 resolution_applied=strategy,
                 outcome=outcome,
-                delay_reduction_achieved=match.delay_before - (match.actual_delay_after or match.delay_before),
+                delay_reduction_achieved=delay_reduction,
                 recovery_time_actual=match.metadata.get("recovery_time", 0),
                 context_summary=self._build_context_summary_from_match(match),
             )
@@ -776,11 +781,33 @@ class RecommendationEngine:
                 sim_confidence=sim_outcome.confidence if sim_outcome else 0.5,
             )
             
+            # Adjust confidence based on network-level risk patterns
+            confidence = self._adjust_confidence_by_network_context(
+                conflict=conflict_data,
+                base_confidence=confidence
+            )
+            
+            # Check for cascade risk
+            cascade_risk_count, cascade_conflicts = self._check_cascade_risk(
+                strategy=strategy,
+                conflict_data=conflict_data,
+                simulation_outcome=sim_outcome
+            )
+            
             # Confidence adjustment
             # Low confidence reduces score
             confidence_adjustment = 0.0
             if confidence < 0.5:
                 confidence_adjustment = -10 * (0.5 - confidence)  # Up to -5 points
+            
+            # Cascade risk penalty
+            # If resolution creates secondary conflicts, penalize the score
+            cascade_penalty = 0.0
+            if cascade_risk_count > 0:
+                cascade_penalty = -5 * cascade_risk_count  # -5 points per secondary conflict
+                logger.warning(
+                    f"{strategy} may trigger {cascade_risk_count} cascading conflicts"
+                )
             
             # Calculate final score
             final_score = (
@@ -789,6 +816,7 @@ class RecommendationEngine:
                 + self.config.similarity_weight * (avg_similarity * 100)
                 + similarity_bonus
                 + confidence_adjustment
+                + cascade_penalty
             )
             
             # Clamp to [0, 100]
@@ -916,6 +944,90 @@ class RecommendationEngine:
         
         return min(0.95, max(0.2, confidence))
     
+    def _adjust_confidence_by_network_context(
+        self,
+        conflict: Dict[str, Any],
+        base_confidence: float
+    ) -> float:
+        """
+        Adjust confidence based on network-level conflict patterns.
+        
+        Args:
+            conflict: Conflict data including metadata
+            base_confidence: Base confidence score
+        
+        Returns:
+            Adjusted confidence score
+        """
+        # Check if AI Service integration is enabled
+        if not settings.AI_SERVICE_ENABLED:
+            return base_confidence
+        
+        # Extract network_id from conflict metadata
+        network_id = conflict.get('metadata', {}).get('network_id')
+        if not network_id:
+            # No network context available
+            return base_confidence
+        
+        try:
+            # Call AI Service network risk endpoint (synchronous)
+            with httpx.Client(timeout=2.0) as client:
+                response = client.post(
+                    f"{settings.AI_SERVICE_URL}/conflicts/network-risk",
+                    json={
+                        "network_id": network_id,
+                        "current_time": datetime.utcnow().isoformat() + "Z"
+                    }
+                )
+                
+                if response.status_code != 200:
+                    logger.warning(f"Network risk API returned {response.status_code}")
+                    return base_confidence
+                
+                risk_data = response.json()
+                
+                # Check if data is available
+                if not risk_data.get('available', False):
+                    return base_confidence
+                
+                current_hour_risk = risk_data.get('current_hour_risk', 0.0)
+                risk_level = risk_data.get('risk_level', 'unknown')
+                
+                # Adjust confidence based on risk level
+                # During high-risk periods, increase confidence in our recommendations
+                # (operators need more decisive guidance)
+                if risk_level == 'critical' and current_hour_risk >= 0.7:
+                    # Critical risk: boost confidence by 20%
+                    adjustment = 1.2
+                    logger.info(f"Network {network_id} in CRITICAL risk ({current_hour_risk:.2f}), boosting confidence")
+                elif risk_level == 'high' and current_hour_risk >= 0.5:
+                    # High risk: boost confidence by 15%
+                    adjustment = 1.15
+                    logger.info(f"Network {network_id} in HIGH risk ({current_hour_risk:.2f}), boosting confidence")
+                elif risk_level == 'medium' and current_hour_risk >= 0.3:
+                    # Medium risk: boost confidence by 10%
+                    adjustment = 1.10
+                else:
+                    # Low risk: no adjustment
+                    adjustment = 1.0
+                
+                # Apply adjustment, capped at 0.95 max confidence
+                adjusted_confidence = min(base_confidence * adjustment, 0.95)
+                
+                logger.debug(
+                    f"Network context adjustment: {base_confidence:.3f} → {adjusted_confidence:.3f} "
+                    f"(network={network_id}, risk={risk_level}, hour_risk={current_hour_risk:.2f})"
+                )
+                
+                return adjusted_confidence
+                
+        except httpx.TimeoutException:
+            logger.warning("Network risk API timeout, using base confidence")
+            return base_confidence
+        except Exception as e:
+            logger.warning(f"Failed to get network context: {e}, using base confidence")
+            return base_confidence
+    
     # =========================================================================
     # Explanation Generation
     # =========================================================================
@@ -948,7 +1060,7 @@ class RecommendationEngine:
             success_pct = success_rate * 100
             
             # Calculate average similarity
-            avg_similarity = sum(e.similarity for e in evidence_list) / num_cases if num_cases > 0 else 0
+            avg_similarity = sum(e.similarity_score for e in evidence_list) / num_cases if num_cases > 0 else 0
             
             if success_rate >= 0.8:
                 parts.append(
@@ -980,11 +1092,11 @@ class RecommendationEngine:
                 )
             
             # Add specific successful case example
-            if evidence_list and evidence_list[0].similarity > 0.75:
+            if evidence_list and evidence_list[0].similarity_score > 0.75:
                 best_case = evidence_list[0]
                 parts.append(
                     f"**Most Similar Case**: Conflict {best_case.conflict_id[:8]}... "
-                    f"({best_case.similarity:.0%} similar) resolved successfully using this strategy."
+                    f"({best_case.similarity_score:.0%} similar) resolved successfully using this strategy."
                 )
                 
         else:
@@ -1167,6 +1279,122 @@ class RecommendationEngine:
             parts.append(f"{len(match.affected_trains)} trains affected")
         
         return ", ".join(parts) if parts else "No additional context"
+    
+    def _check_cascade_risk(
+        self,
+        strategy: ResolutionStrategy,
+        conflict_data: Dict[str, Any],
+        simulation_outcome: Optional[SimulationOutcome]
+    ) -> Tuple[int, List[Dict[str, Any]]]:
+        """
+        Check if applying this resolution strategy might trigger cascading conflicts.
+        
+        This implements the proposal requirement to "anticipate secondary and
+        cascading conflicts" by simulating forward in time to detect new conflicts
+        that might be triggered by the resolution.
+        
+        Args:
+            strategy: The resolution strategy being evaluated
+            conflict_data: Current conflict details
+            simulation_outcome: Result from digital twin simulation
+        
+        Returns:
+            Tuple of (cascade_count, list of secondary conflicts detected)
+        """
+        try:
+            # If simulation didn't run, we can't assess cascade risk
+            if not simulation_outcome:
+                return 0, []
+            
+            # Check simulation outcome for side effects
+            side_effects = simulation_outcome.side_effects or []
+            
+            # Count potential cascading conflicts
+            cascade_conflicts = []
+            
+            for effect in side_effects:
+                # Analyze each side effect to determine if it could cause a conflict
+                if self._is_conflict_trigger(effect):
+                    cascade_conflicts.append({
+                        "triggered_by": strategy.value,
+                        "effect": effect,
+                        "severity": self._estimate_cascade_severity(effect)
+                    })
+            
+            # Additional heuristic checks based on strategy type
+            # Some strategies are known to have higher cascade risk
+            high_risk_strategies = {
+                ResolutionStrategy.ROUTE_MODIFICATION: [
+                    "May create conflicts on alternate routes",
+                    "Could affect trains on parallel tracks"
+                ],
+                ResolutionStrategy.SCHEDULE_ADJUSTMENT: [
+                    "May create downstream timing conflicts",
+                    "Could affect connecting services"
+                ],
+                ResolutionStrategy.PLATFORM_CHANGE: [
+                    "May displace other scheduled services",
+                    "Could create platform capacity issues"
+                ]
+            }
+            
+            if strategy in high_risk_strategies:
+                for risk_description in high_risk_strategies[strategy]:
+                    # Only add if not already detected by simulation
+                    if not any(risk_description.lower() in str(c).lower() 
+                              for c in cascade_conflicts):
+                        cascade_conflicts.append({
+                            "triggered_by": strategy.value,
+                            "effect": risk_description,
+                            "severity": "potential"
+                        })
+            
+            return len(cascade_conflicts), cascade_conflicts
+            
+        except Exception as e:
+            logger.warning(f"Cascade risk check failed: {e}")
+            return 0, []
+    
+    def _is_conflict_trigger(self, side_effect: str) -> bool:
+        """
+        Determine if a side effect is likely to trigger a conflict.
+        
+        Args:
+            side_effect: Description of the side effect
+        
+        Returns:
+            True if the side effect could cause a cascading conflict
+        """
+        # Keywords that indicate conflict potential
+        conflict_indicators = [
+            "delay", "block", "conflict", "congest", "capacity",
+            "overflow", "collision", "interference", "disruption"
+        ]
+        
+        side_effect_lower = side_effect.lower()
+        return any(indicator in side_effect_lower for indicator in conflict_indicators)
+    
+    def _estimate_cascade_severity(self, side_effect: str) -> str:
+        """
+        Estimate severity of a cascading conflict.
+        
+        Args:
+            side_effect: Description of the side effect
+        
+        Returns:
+            Severity estimate: "high", "medium", or "low"
+        """
+        high_severity_keywords = ["severe", "critical", "major", "multiple"]
+        medium_severity_keywords = ["moderate", "minor", "partial"]
+        
+        side_effect_lower = side_effect.lower()
+        
+        if any(keyword in side_effect_lower for keyword in high_severity_keywords):
+            return "high"
+        elif any(keyword in side_effect_lower for keyword in medium_severity_keywords):
+            return "medium"
+        else:
+            return "low"
 
 
 # =============================================================================

@@ -1,8 +1,20 @@
+# AI Service Dependencies (Python 3.13 compatible)
+
+# Web Framework
 flask==3.0.0
 flask-cors==4.0.0
-sentence-transformers>=2.2.2
-numpy>=1.26.0
-python-dotenv==1.0.0
-qdrant-client>=1.7.0
+
+# AI/ML - Updated for Python 3.13 compatibility
+sentence-transformers==5.2.2
+transformers==5.0.0
 torch>=2.1.0
-transformers>=4.35.0
+numpy>=1.26.0
+
+# Data Processing
+pandas==2.3.1
+
+# Vector Database
+qdrant-client>=1.7.0
+
+# Utilities
+python-dotenv==1.0.0

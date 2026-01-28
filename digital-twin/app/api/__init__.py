@@ -7,7 +7,7 @@ for handling HTTP requests related to rail conflict resolution.
 
 from fastapi import APIRouter
 
-from app.api.routes import conflicts, recommendations
+from app.api.routes import conflicts, recommendations, preventive_alerts
 
 # Main API router that aggregates all route modules
 router = APIRouter()
@@ -15,3 +15,4 @@ router = APIRouter()
 # Include sub-routers
 router.include_router(conflicts.router, prefix="/conflicts", tags=["Conflicts"])
 router.include_router(recommendations.router, prefix="/recommendations", tags=["Recommendations"])
+router.include_router(preventive_alerts.router, prefix="/preventive-alerts", tags=["Preventive Alerts"])

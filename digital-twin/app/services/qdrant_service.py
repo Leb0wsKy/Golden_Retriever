@@ -591,6 +591,75 @@ class QdrantService:
                 {"error": str(e)}
             )
     
+    def upsert_golden_run(
+        self,
+        golden_run_id: str,
+        embedding: List[float],
+        payload: Dict[str, Any],
+        boost_weight: float = 2.0,
+    ) -> UpsertResult:
+        """
+        Store a verified golden run in Qdrant with special weighting.
+        
+        Golden runs are verified resolution outcomes that serve as high-quality
+        training data. They receive boost_weight (default 2.0) to rank higher
+        in similarity searches, making verified resolutions more influential.
+        
+        Args:
+            golden_run_id: Unique ID for the golden run.
+            embedding: Vector embedding of the golden run.
+            payload: Metadata including conflict + resolution details.
+            boost_weight: Multiplier for similarity scores (default 2.0).
+        
+        Returns:
+            UpsertResult with success status.
+        
+        Raises:
+            QdrantQueryError: If upsert fails.
+        """
+        self.ensure_collections()
+        
+        try:
+            from qdrant_client.models import PointStruct
+            
+            # Enrich payload with golden run markers
+            enriched_payload = {
+                **payload,
+                "is_golden_run": True,
+                "boost_weight": boost_weight,
+                "verified_outcome": True,
+                "original_golden_run_id": golden_run_id,
+            }
+            
+            point_id = _string_to_uuid(golden_run_id)
+            
+            self.client.upsert(
+                collection_name=CollectionName.CONFLICT_MEMORY.value,
+                points=[
+                    PointStruct(
+                        id=point_id,
+                        vector=embedding,
+                        payload=enriched_payload
+                    )
+                ]
+            )
+            
+            logger.info(
+                f"Stored golden run {golden_run_id} with boost_weight={boost_weight}"
+            )
+            
+            return UpsertResult(
+                id=golden_run_id,
+                collection=CollectionName.CONFLICT_MEMORY.value,
+                success=True,
+            )
+            
+        except Exception as e:
+            raise QdrantQueryError(
+                f"Failed to upsert golden run {golden_run_id}",
+                {"error": str(e), "golden_run_id": golden_run_id}
+            )
+    
     def search_similar_conflicts(
         self,
         query_embedding: List[float],
@@ -656,11 +725,25 @@ class QdrantService:
             
             search_time_ms = (time.time() - start_time) * 1000
             
-            # Convert to typed models
-            matches = [
-                self._hit_to_similar_conflict(hit)
-                for hit in results
-            ]
+            # Convert to typed models and apply boost weights
+            matches = []
+            for hit in results:
+                match = self._hit_to_similar_conflict(hit)
+                
+                # Apply boost weight for golden runs (verified outcomes)
+                boost_weight = hit.payload.get("boost_weight", 1.0)
+                if boost_weight != 1.0:
+                    # Adjust the score by the boost weight
+                    # This makes golden runs rank higher in similarity
+                    match.score = min(match.score * boost_weight, 1.0)
+                
+                matches.append(match)
+            
+            # Re-sort by boosted scores (descending)
+            matches.sort(key=lambda m: m.score, reverse=True)
+            
+            # Re-apply limit after boosting (in case scores changed order)
+            matches = matches[:limit]
             
             return SearchResult(
                 matches=matches,
@@ -789,8 +872,9 @@ class QdrantService:
                 query_filter=query_filter
             )
             
+            # Return both state and similarity score from Qdrant
             return [
-                PreConflictState(**hit.payload)
+                (PreConflictState(**hit.payload), hit.score)
                 for hit in results
             ]
             

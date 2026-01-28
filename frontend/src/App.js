@@ -20,10 +20,13 @@ import {
   AccountCircle as AccountCircleIcon,
   Person as PersonIcon,
   Logout as LogoutIcon,
+  Analytics as AnalyticsIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import Dashboard from './components/Dashboard';
-import Settings from './components/Settings';
 import Alerts from './components/Alerts';
+import ConflictHistory from './components/ConflictHistory';
+import Analytics from './components/Analytics';
 import './App.css';
 
 function App() {
@@ -61,8 +64,9 @@ function App() {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Alerts', icon: <NotificationsIcon />, path: '/alerts' },
-    { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+    { text: 'Live Alerts', icon: <NotificationsIcon />, path: '/alerts' },
+    { text: 'Conflict History', icon: <HistoryIcon />, path: '/history' },
+    { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
   ];
 
   return (
@@ -176,7 +180,8 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard stats={stats} />} />
               <Route path="/alerts" element={<Alerts />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/history" element={<ConflictHistory />} />
+              <Route path="/analytics" element={<Analytics />} />
             </Routes>
           </Container>
         </Box>

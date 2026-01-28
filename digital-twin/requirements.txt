@@ -1,4 +1,6 @@
-# FastAPI Application Dependencies (Python 3.13 compatible)
+# Digital Twin Service Dependencies (Python 3.13 compatible)
+
+# FastAPI Application
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.10.0
@@ -7,17 +9,17 @@ pydantic-settings==2.6.0
 # Vector Database
 qdrant-client==1.12.0
 
-# AI/ML
+# AI/ML - Local embedding fallback
 sentence-transformers==3.3.1
-numpy>=2.4.0  # Use numpy 2.x for Python 3.13 compatibility
+numpy>=2.4.0  # numpy 2.x for Python 3.13 compatibility
 
-# HTTP Client
+# HTTP Client - For AI Service integration
 httpx==0.27.0
 requests==2.32.0
+
+# Data Processing
+pandas==3.0.0  # For network conflict analysis
 
 # Utilities
 python-dotenv==1.0.0
 python-multipart==0.0.9
-
-# CORS (built into FastAPI, no separate package needed)
-# fastapi-cors is deprecated - using FastAPI's built-in CORS middleware

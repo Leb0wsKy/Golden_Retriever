@@ -1,0 +1,25 @@
+{
+  "total_records": 1075,
+  "conflict_records": 1000,
+  "normal_records": 75,
+  "label_distribution": {
+    "platform_conflict": 250,
+    "headway_conflict": 200,
+    "capacity_congestion_conflict": 150,
+    "delay_propagation_conflict": 150,
+    "schedule_inconsistency_conflict": 100,
+    "service_gap_conflict": 100,
+    "normal": 75,
+    "transfer_timing_conflict": 50
+  },
+  "conflict_types": [
+    "platform_conflict",
+    "headway_conflict",
+    "delay_propagation_conflict",
+    "capacity_congestion_conflict",
+    "service_gap_conflict",
+    "schedule_inconsistency_conflict",
+    "transfer_timing_conflict"
+  ],
+  "generation_timestamp": "2026-01-28T15:14:18.407651"
+}

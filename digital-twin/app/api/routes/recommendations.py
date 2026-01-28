@@ -229,6 +229,7 @@ class QuickRecommendationRequest(BaseModel):
     delay_before: int = Field(default=0, ge=0, description="Current delay (min)")
     description: str = Field(..., description="Conflict description")
     platform: Optional[str] = Field(default=None, description="Platform")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata (e.g., network_id)")
     
     class Config:
         json_schema_extra = {
@@ -240,7 +241,8 @@ class QuickRecommendationRequest(BaseModel):
                 "affected_trains": ["IC101", "RE205"],
                 "delay_before": 15,
                 "description": "Platform 3 double-booked for arrivals",
-                "platform": "3"
+                "platform": "3",
+                "metadata": {"network_id": "FS"}
             }
         }
 
@@ -322,6 +324,7 @@ async def get_quick_recommendations(
             "delay_before": request.delay_before,
             "description": request.description,
             "platform": request.platform,
+            "metadata": request.metadata,
         }
         
         # Get recommendations

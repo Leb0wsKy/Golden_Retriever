@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
+from datetime import datetime
+from network_monitor import get_network_monitor
 
 load_dotenv()
 
@@ -247,7 +249,87 @@ def search_similar():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/conflicts/network-risk', methods=['POST'])
+def get_network_risk():
+    """
+    Get network-level conflict risk assessment.
+    
+    Request body:
+        {
+            "network_id": "FS",  # Network identifier
+            "current_time": "2026-01-28T19:00:00Z"  # Optional, defaults to now
+        }
+    
+    Response:
+        {
+            "network_id": "FS",
+            "overall_conflict_rate": 0.85,
+            "current_hour_risk": 0.92,
+            "risk_level": "critical",
+            "high_risk_windows": [...],
+            "conflict_types": {...},
+            "available": true
+        }
+    """
+    try:
+        data = request.json
+        network_id = data.get('network_id')
+        
+        if not network_id:
+            return jsonify({'error': 'network_id is required'}), 400
+        
+        # Parse current time or use now
+        current_time_str = data.get('current_time')
+        if current_time_str:
+            try:
+                current_time = datetime.fromisoformat(current_time_str.replace('Z', '+00:00'))
+            except:
+                current_time = datetime.utcnow()
+        else:
+            current_time = datetime.utcnow()
+        
+        # Get network monitor instance
+        monitor = get_network_monitor()
+        
+        # Get risk assessment
+        risk_data = monitor.get_network_risk(network_id, current_time)
+        
+        return jsonify(risk_data)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/conflicts/networks-summary', methods=['GET'])
+def get_networks_summary():
+    """
+    Get summary of all networks.
+    
+    Response:
+        [
+            {
+                "network_id": "FS",
+                "conflict_rate": 0.989,
+                "total_snapshots": 386,
+                "avg_train_count": 386.0,
+                ...
+            }
+        ]
+    """
+    try:
+        monitor = get_network_monitor()
+        summary = monitor.get_all_networks_summary()
+        
+        return jsonify({
+            'networks': summary,
+            'total_networks': len(summary)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     port = int(os.getenv('AI_SERVICE_PORT', 5001))
     print(f"Starting AI Service on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)

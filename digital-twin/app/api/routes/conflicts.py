@@ -349,6 +349,85 @@ async def get_conflict(conflict_id: str):
     return _conflict_store[conflict_id]
 
 
+@router.post("/", response_model=ConflictResponse, status_code=201)
+async def create_conflict(
+    request: AnalyzeConflictRequest,
+    embedding_service: EmbeddingService = Depends(get_embedding_service),
+    qdrant_service: QdrantService = Depends(get_qdrant_service),
+):
+    """
+    Create a new conflict record.
+    
+    Creates a conflict and optionally stores it in Qdrant vector database
+    with embeddings for similarity search.
+    
+    Args:
+        request: Conflict details
+        embedding_service: Service for generating embeddings
+        qdrant_service: Service for vector storage
+        
+    Returns:
+        Created conflict with ID
+    """
+    try:
+        # Generate conflict ID
+        conflict_id = f"conf-{uuid.uuid4().hex[:12]}"
+        
+        # Build conflict text for embedding
+        conflict_text = (
+            f"{request.conflict_type.value} at {request.station} "
+            f"during {request.time_of_day.value}. "
+            f"Severity: {request.severity.value}. "
+            f"{request.description}"
+        )
+        
+        # Create conflict record
+        conflict_data = {
+            "id": conflict_id,
+            "conflict_type": request.conflict_type.value,
+            "severity": request.severity.value,
+            "station": request.station,
+            "time_of_day": request.time_of_day.value,
+            "affected_trains": request.affected_trains,
+            "delay_before": request.delay_before,
+            "description": request.description,
+            "platform": request.platform,
+            "track_section": request.track_section,
+            "metadata": request.metadata,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        
+        # Store in memory
+        _conflict_store[conflict_id] = conflict_data
+        
+        # Store in Qdrant if requested
+        if request.store_in_qdrant:
+            try:
+                # Generate embedding
+                embedding = embedding_service.embed(conflict_text)
+                
+                # Store in Qdrant
+                qdrant_service.upsert_conflict(
+                    conflict_id=conflict_id,
+                    embedding=embedding,
+                    payload=conflict_data
+                )
+                
+                logger.info(f"Stored conflict {conflict_id} in Qdrant")
+            except Exception as e:
+                logger.error(f"Failed to store in Qdrant: {e}")
+                # Don't fail the request if Qdrant storage fails
+        
+        return conflict_data
+        
+    except Exception as e:
+        logger.error(f"Error creating conflict: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create conflict: {str(e)}"
+        )
+
+
 @router.post("/generate", response_model=GenerateConflictsResponse)
 async def generate_conflicts(
     request: GenerateConflictsRequest,

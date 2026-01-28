@@ -126,6 +126,22 @@ class Settings(BaseSettings):
     )
     
     # ===================
+    # AI Service Integration
+    # ===================
+    AI_SERVICE_URL: Optional[str] = Field(
+        default="http://localhost:5001",
+        description="AI Service URL for embedding generation"
+    )
+    AI_SERVICE_ENABLED: bool = Field(
+        default=True,
+        description="Use AI Service for embeddings (fallback to local if unavailable)"
+    )
+    AI_SERVICE_TIMEOUT: int = Field(
+        default=5,
+        description="AI Service request timeout in seconds"
+    )
+    
+    # ===================
     # Transitland API Settings
     # ===================
     TRANSITLAND_API_KEY: Optional[str] = Field(
