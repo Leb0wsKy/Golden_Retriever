@@ -1,11 +1,5 @@
 # 🚀 Golden Retriever - Demo Script
 
-**Date:** January 28, 2026  
-**Presenter:** Hayder Jamli  
-**Duration:** 10-15 minutes  
-**Audience:** Stakeholders, Collaborators, Rail Industry Professionals
-
----
 
 ## 📋 Pre-Demo Checklist
 
