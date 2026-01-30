@@ -3,11 +3,15 @@ from flask_cors import CORS
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import os
+import sys
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
 from datetime import datetime
+
+# Add conflicts-collection directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'conflicts-collection'))
 from network_monitor import get_network_monitor
 
 load_dotenv()

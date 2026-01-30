@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const axios = require('axios');
+const authService = require('./auth-service');
 
 // Note: Legacy Qdrant modules for deprecated alerts system (lines 197-699) are no longer imported
 // Digital Twin service now handles all conflict/alert management via proxy endpoints
@@ -23,6 +24,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const qdrantClient = new QdrantClient({
   url: process.env.QDRANT_URL,
   apiKey: process.env.QDRANT_API_KEY,
+  timeout: 30000,
+  checkCompatibility: false,
 });
 
 // System stats
@@ -1706,6 +1709,65 @@ app.get('/api/settings', (req, res) => {
 app.post('/api/settings', (req, res) => {
   // In a real application, you would update environment variables or a config file
   res.json({ success: true, message: 'Settings saved successfully' });
+});
+
+// ============================================
+// AUTHENTICATION ENDPOINTS
+// ============================================
+
+// Initialize users collection
+authService.initializeUsersCollection();
+
+// Signup endpoint
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, name } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: 'Email and password are required' });
+  }
+  
+  const result = await authService.signup(email, password, name);
+  
+  if (result.success) {
+    res.status(201).json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: 'Email and password are required' });
+  }
+  
+  const result = await authService.login(email, password);
+  
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(401).json(result);
+  }
+});
+
+// Verify token endpoint
+app.get('/api/auth/verify', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ valid: false, message: 'No token provided' });
+  }
+  
+  const verification = authService.verifyToken(token);
+  res.json(verification);
+});
+
+// Protected route example
+app.get('/api/auth/profile', authService.authenticateToken, (req, res) => {
+  res.json({ user: req.user });
 });
 
 // Start Server
