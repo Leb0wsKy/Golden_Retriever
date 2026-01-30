@@ -15,6 +15,7 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
+
 echo Installing test dependencies...
 pip install requests >nul 2>&1
 

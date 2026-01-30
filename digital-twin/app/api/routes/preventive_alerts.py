@@ -58,7 +58,7 @@ class ScanConfigRequest(BaseModel):
 )
 async def get_preventive_alerts(
     min_confidence: float = Query(
-        default=0.6, ge=0, le=1,
+        default=0.3, ge=0, le=1,
         description="Minimum confidence threshold for returned alerts"
     ),
     max_alerts: int = Query(

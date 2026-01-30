@@ -100,8 +100,8 @@ class PreConflictScanner:
     
     def __init__(
         self,
-        similarity_threshold: float = 0.5,
-        alert_confidence_threshold: float = 0.5,
+        similarity_threshold: float = 0.35,
+        alert_confidence_threshold: float = 0.3,
     ):
         """
         Initialize the scanner.
@@ -137,7 +137,7 @@ class PreConflictScanner:
             try:
                 similar_patterns = self.qdrant_service.search_similar_pre_conflict_states(
                     query_embedding=state_embedding,
-                    limit=10,
+                    limit=20,  # Increased to find more matches
                     conflict_occurred_only=False  # All patterns (filter needs index)
                 )
             except Exception as search_error:
@@ -182,16 +182,38 @@ class PreConflictScanner:
         Capture current network state (trains, delays, congestion).
         
         In a production system, this would query real-time data sources.
-        For now, we simulate a basic state.
+        For now, we simulate realistic varied states to match stored patterns.
         """
         # TODO: Integrate with real-time train tracking API
+        import random
+        from datetime import datetime as dt
+        
+        # Determine time of day for realistic variations
+        hour = dt.utcnow().hour
+        
+        if 6 <= hour < 9 or 16 <= hour < 19:  # Peak hours
+            active_trains = random.randint(18, 25)
+            avg_delay = random.uniform(4.0, 8.0)
+            congestion = random.choice(["moderate", "high"])
+            density = random.uniform(0.65, 0.85)
+        elif 9 <= hour < 16 or 19 <= hour < 22:  # Off-peak
+            active_trains = random.randint(10, 18)
+            avg_delay = random.uniform(2.0, 5.0)
+            congestion = random.choice(["low", "moderate"])
+            density = random.uniform(0.40, 0.65)
+        else:  # Night
+            active_trains = random.randint(3, 8)
+            avg_delay = random.uniform(0.5, 2.5)
+            congestion = "low"
+            density = random.uniform(0.15, 0.35)
+        
         return {
             "timestamp": datetime.utcnow().isoformat(),
-            "active_trains": 15,
-            "average_delay_minutes": 3.2,
-            "congestion_level": "moderate",
-            "network_density": 0.68,
-            "infrastructure_status": "normal",
+            "active_trains": active_trains,
+            "average_delay_minutes": round(avg_delay, 1),
+            "congestion_level": congestion,
+            "network_density": round(density, 2),
+            "infrastructure_status": random.choice(["normal", "normal", "normal", "degraded"]),
         }
     
     def _generate_state_embedding(self, state: Dict[str, Any]) -> List[float]:
@@ -347,8 +369,8 @@ _scanner_instance: Optional[PreConflictScanner] = None
 
 
 def get_pre_conflict_scanner(
-    similarity_threshold: float = 0.5,
-    alert_confidence_threshold: float = 0.5,
+    similarity_threshold: float = 0.35,
+    alert_confidence_threshold: float = 0.3,
 ) -> PreConflictScanner:
     """Get singleton PreConflictScanner instance."""
     global _scanner_instance
