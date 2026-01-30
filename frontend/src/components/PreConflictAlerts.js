@@ -14,6 +14,7 @@ import {
   ListItem,
   ListItemText,
   Button,
+  Snackbar,
 } from '@mui/material';
 import {
   Warning as WarningIcon,
@@ -30,6 +31,8 @@ function PreConflictAlerts() {
   const [loading, setLoading] = useState(true);
   const [scannerStatus, setScannerStatus] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
     fetchAlerts();
@@ -49,8 +52,10 @@ function PreConflictAlerts() {
       setAlerts(Array.isArray(response.data) ? response.data : []);
       setLastUpdate(new Date());
       setLoading(false);
+      setError(null); // Clear any previous errors
     } catch (error) {
       console.error('Error fetching preventive alerts:', error);
+      setError('Failed to fetch alerts. Please check if the API is running.');
       setLoading(false);
     }
   };
@@ -61,6 +66,7 @@ function PreConflictAlerts() {
       setScannerStatus(response.data);
     } catch (error) {
       console.error('Error fetching scanner status:', error);
+      // Don't show error for status check - it's not critical
     }
   };
 
@@ -68,27 +74,29 @@ function PreConflictAlerts() {
     try {
       setLoading(true);
       await axios.post('http://localhost:8000/api/v1/preventive-alerts/scan', {
-        similarity_threshold: 0.75,
-        alert_confidence_threshold: 0.6
+        similarity_threshold: 0.35,
+        alert_confidence_threshold: 0.3
       });
+      setSuccessMessage('Manual scan completed successfully!');
       // Refresh alerts after scan
       setTimeout(fetchAlerts, 2000);
     } catch (error) {
       console.error('Error triggering manual scan:', error);
+      setError('Failed to trigger manual scan. Please try again.');
       setLoading(false);
     }
   };
 
   const getSeverityColor = (confidence) => {
-    if (confidence >= 0.8) return 'error';
-    if (confidence >= 0.6) return 'warning';
-    return 'info';
+    if (confidence >= 0.65) return 'error';    // High confidence (65%+)
+    if (confidence >= 0.45) return 'warning';  // Medium confidence (45-65%)
+    return 'info';                              // Lower confidence (30-45%)
   };
 
   const getSeverityIcon = (confidence) => {
-    if (confidence >= 0.8) return <ErrorIcon />;
-    if (confidence >= 0.6) return <WarningIcon />;
-    return <TrendingUpIcon />;
+    if (confidence >= 0.65) return <ErrorIcon />;    // High confidence
+    if (confidence >= 0.45) return <WarningIcon />;  // Medium confidence
+    return <TrendingUpIcon />;                        // Lower confidence
   };
 
   const formatTimeToConflict = (minutes) => {
@@ -251,6 +259,30 @@ function PreConflictAlerts() {
           Last updated: {lastUpdate.toLocaleTimeString()}
         </Typography>
       )}
+
+      {/* Error Notification */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={6000}
+        onClose={() => setError(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
+
+      {/* Success Notification */}
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={3000}
+        onClose={() => setSuccessMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 }

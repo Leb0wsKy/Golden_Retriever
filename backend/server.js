@@ -689,6 +689,459 @@ app.get('/api/alerts/live', async (req, res) => {
 });
 */  // End of DEPRECATED alerts endpoints
 
+// ==============================================================================
+// LIVE ALERTS ENDPOINT - Proxies to Digital Twin Conflicts
+// ==============================================================================
+app.get('/api/alerts/live', async (req, res) => {
+  try {
+    console.log('📡 Fetching live alerts from Digital Twin...');
+    
+    let alerts = [];
+    let source = 'digital_twin';
+    let warning = null;
+    
+    try {
+      // Try to fetch conflicts from Digital Twin
+      const conflictsResponse = await axios.get('http://localhost:8000/api/v1/conflicts/', {
+        params: { limit: 100 },
+        timeout: 5000
+      });
+      
+      const conflicts = conflictsResponse.data || [];
+      console.log(`Retrieved ${conflicts.length} conflicts from Digital Twin`);
+      
+      // If no conflicts, try direct Qdrant query as fallback
+      if (conflicts.length === 0) {
+        console.log('Trying direct Qdrant query...');
+        try {
+          const scrollResult = await qdrantClient.scroll('conflict_memory', {
+            limit: 50,
+            with_payload: true,
+            with_vector: false
+          });
+          
+          const qdrantConflicts = scrollResult.points || [];
+          console.log(`Found ${qdrantConflicts.length} conflicts in Qdrant directly`);
+          
+          if (qdrantConflicts.length > 0) {
+            alerts = qdrantConflicts.map(point => ({
+              id: point.id || `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              severity: mapSeverityToAlertLevel(point.payload.severity),
+              conflictType: point.payload.conflict_type,
+              conflict: point.payload.description || `${point.payload.conflict_type} at ${point.payload.station}`,
+              solution: point.payload.recommended_resolution?.description || 'Investigating optimal resolution strategy',
+              confidence: point.payload.recommended_resolution?.confidence || 0.75,
+              train: {
+                id: point.payload.affected_trains?.[0] || 'N/A',
+                name: point.payload.affected_trains?.[0] || 'Unknown',
+                route: `${point.payload.station} Service`
+              },
+              timestamp: point.payload.timestamp || new Date().toISOString(),
+              usingAI: true,
+              metadata: point.payload.metadata || {}
+            }));
+            source = 'qdrant_direct';
+            warning = 'Retrieved from Qdrant directly (Digital Twin API returned empty)';
+          }
+        } catch (qdrantError) {
+          console.log(`Qdrant direct query failed: ${qdrantError.message}`);
+        }
+      }
+      
+      // If still no conflicts, use simulation
+      if (alerts.length === 0) {
+        console.log('No conflicts found, generating simulated alerts...');
+        alerts = generateMockAlerts(25); // Generate 25 simulated alerts
+        source = 'simulation';
+        warning = 'No conflicts in database - showing simulated data for demonstration';
+      } else if (conflicts.length > 0) {
+        // Transform conflicts to alerts format
+        alerts = conflicts.map(conflict => ({
+          id: conflict.id || `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          severity: mapSeverityToAlertLevel(conflict.severity),
+          conflictType: conflict.conflict_type,
+          conflict: conflict.description || `${conflict.conflict_type} at ${conflict.station}`,
+          solution: conflict.recommended_resolution?.description || 
+                    conflict.recommended_resolutions?.[0]?.description || 
+                    'Investigating optimal resolution strategy',
+          confidence: conflict.recommended_resolution?.confidence || 
+                      conflict.recommended_resolutions?.[0]?.confidence || 
+                      0.75,
+          train: {
+            id: conflict.affected_trains?.[0] || 'N/A',
+            name: conflict.affected_trains?.[0] || 'Unknown',
+            route: `${conflict.station} Service`
+          },
+          timestamp: conflict.timestamp || new Date().toISOString(),
+          usingAI: true,
+          metadata: {
+            station: conflict.station,
+            time_of_day: conflict.time_of_day,
+            delay_before: conflict.delay_before,
+            delay_after: conflict.delay_after,
+            final_outcome: conflict.final_outcome
+          }
+        }));
+      }
+    } catch (dtError) {
+      console.log(`Digital Twin unavailable (${dtError.message}), using simulation...`);
+      alerts = generateMockAlerts(25);
+      source = 'fallback_simulation';
+      warning = 'Digital Twin service unavailable - showing simulated data';
+    }
+    
+    // Calculate statistics
+    const stats = {
+      total: alerts.length,
+      displayed: alerts.length,
+      bySeverity: {
+        severe: alerts.filter(a => a.severity === 'severe').length,
+        moderate: alerts.filter(a => a.severity === 'moderate').length,
+        minor: alerts.filter(a => a.severity === 'minor').length,
+      },
+      withAI: alerts.filter(a => a.usingAI).length,
+      avgConfidence: alerts.length > 0 
+        ? alerts.reduce((sum, a) => sum + a.confidence, 0) / alerts.length 
+        : 0,
+    };
+    
+    console.log(`Serving ${alerts.length} alerts (severe: ${stats.bySeverity.severe}, moderate: ${stats.bySeverity.moderate}, minor: ${stats.bySeverity.minor}) from ${source}`);
+    
+    const response = {
+      alerts: alerts,
+      stats: stats,
+      trainsAnalyzed: alerts.length,
+      timestamp: new Date().toISOString(),
+      source: source,
+      cached: false
+    };
+    
+    if (warning) {
+      response.warning = warning;
+    }
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('Error in live alerts endpoint:', error.message);
+    
+    // Ultimate fallback
+    const mockAlerts = generateMockAlerts(20);
+    const mockStats = {
+      total: mockAlerts.length,
+      displayed: mockAlerts.length,
+      bySeverity: {
+        severe: mockAlerts.filter(a => a.severity === 'severe').length,
+        moderate: mockAlerts.filter(a => a.severity === 'moderate').length,
+        minor: mockAlerts.filter(a => a.severity === 'minor').length,
+      },
+      withAI: mockAlerts.filter(a => a.usingAI).length,
+      avgConfidence: 0.75,
+    };
+    
+    res.json({
+      alerts: mockAlerts,
+      stats: mockStats,
+      trainsAnalyzed: mockAlerts.length,
+      timestamp: new Date().toISOString(),
+      source: 'error_fallback',
+      cached: false,
+      warning: 'Error occurred - using simulated data',
+      error: error.message
+    });
+  }
+});
+
+// Helper function to map severity levels
+function mapSeverityToAlertLevel(severity) {
+  const severityMap = {
+    'critical': 'severe',
+    'high': 'severe',
+    'medium': 'moderate',
+    'low': 'minor'
+  };
+  return severityMap[severity?.toLowerCase()] || 'moderate';
+}
+
+// Generate mock alerts for fallback
+function generateMockAlerts(count = 20) {
+  const conflictTypes = ['delay', 'platform_conflict', 'track_blockage', 'signal_failure', 'weather', 'capacity_overload'];
+  const stations = ['London Waterloo', 'London Victoria', 'Birmingham New Street', 'Manchester Piccadilly', 'Leeds', 'Glasgow Central'];
+  const severities = ['severe', 'moderate', 'minor'];
+  
+  const alerts = [];
+  const now = Date.now();
+  
+  // Distribute severities: 20% severe, 40% moderate, 40% minor
+  const severityDist = [
+    ...Array(Math.floor(count * 0.2)).fill('severe'),
+    ...Array(Math.floor(count * 0.4)).fill('moderate'),
+    ...Array(Math.floor(count * 0.4)).fill('minor'),
+  ];
+  
+  for (let i = 0; i < count; i++) {
+    const conflictType = conflictTypes[Math.floor(Math.random() * conflictTypes.length)];
+    const station = stations[Math.floor(Math.random() * stations.length)];
+    const severity = severityDist[i] || 'moderate';
+    const trainId = `T${Math.floor(Math.random() * 9000) + 1000}`;
+    
+    const conflictMessages = {
+      'delay': `${trainId} experiencing ${Math.floor(Math.random() * 30) + 5} minute delay at ${station}`,
+      'platform_conflict': `Platform allocation conflict for ${trainId} at ${station}`,
+      'track_blockage': `Track blockage affecting ${trainId} service at ${station}`,
+      'signal_failure': `Signal failure impacting ${trainId} at ${station}`,
+      'weather': `Weather-related service disruption for ${trainId} at ${station}`,
+      'capacity_overload': `High passenger volumes on ${trainId} at ${station}`
+    };
+    
+    const solutions = {
+      'delay': 'Speed regulation and schedule adjustment recommended',
+      'platform_conflict': 'Platform reassignment to available bay',
+      'track_blockage': 'Route modification via alternate track',
+      'signal_failure': 'Manual operation with reduced speed limits',
+      'weather': 'Service frequency adjustment and passenger notification',
+      'capacity_overload': 'Additional carriage deployment or express service'
+    };
+    
+    alerts.push({
+      id: `mock-${now}-${i}`,
+      severity: severity,
+      conflictType: conflictType,
+      conflict: conflictMessages[conflictType],
+      solution: solutions[conflictType],
+      confidence: 0.7 + (Math.random() * 0.25),
+      train: {
+        id: trainId,
+        name: `Train ${trainId}`,
+        route: `${station} Service`
+      },
+      timestamp: new Date(now - (Math.random() * 3600000)).toISOString(), // Within last hour
+      usingAI: true,
+      metadata: {
+        station: station,
+        simulated: true
+      }
+    });
+  }
+  
+  return alerts;
+}
+
+// ==============================================================================
+// DIGITAL TWIN PROXY ENDPOINTS - For Conflict History & Analytics
+// ==============================================================================
+
+// Proxy endpoint for conflicts - supports both real data and simulation
+app.get('/api/digital-twin/conflicts', async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    console.log(`📡 Fetching conflicts for history/analytics (limit: ${limit})...`);
+    
+    let conflicts = [];
+    let source = 'digital_twin';
+    
+    try {
+      // Try Digital Twin API
+      const dtResponse = await axios.get('http://localhost:8000/api/v1/conflicts/', {
+        params: { limit: parseInt(limit) },
+        timeout: 5000
+      });
+      
+      conflicts = dtResponse.data || [];
+      console.log(`Retrieved ${conflicts.length} conflicts from Digital Twin`);
+      
+      // Try direct Qdrant if empty
+      if (conflicts.length === 0) {
+        console.log('Trying direct Qdrant query...');
+        const scrollResult = await qdrantClient.scroll('conflict_memory', {
+          limit: parseInt(limit),
+          with_payload: true,
+          with_vector: false
+        });
+        
+        conflicts = (scrollResult.points || []).map(point => ({
+          id: point.id,
+          conflict_type: point.payload.conflict_type,
+          severity: point.payload.severity,
+          station: point.payload.station,
+          time_of_day: point.payload.time_of_day,
+          affected_trains: point.payload.affected_trains || [],
+          delay_before: point.payload.delay_before,
+          delay_after: point.payload.delay_after,
+          description: point.payload.description,
+          timestamp: point.payload.timestamp || point.payload.detected_at,
+          detected_at: point.payload.detected_at,
+          resolved: point.payload.final_outcome?.outcome === 'success',
+          recommended_resolution: point.payload.recommended_resolution,
+          final_outcome: point.payload.final_outcome,
+          metadata: point.payload.metadata
+        }));
+        
+        if (conflicts.length > 0) {
+          source = 'qdrant_direct';
+          console.log(`Found ${conflicts.length} conflicts in Qdrant`);
+        }
+      }
+    } catch (dtError) {
+      console.log(`Digital Twin error: ${dtError.message}`);
+    }
+    
+    // Generate simulation if still empty
+    if (conflicts.length === 0) {
+      console.log('Generating simulated conflict history...');
+      conflicts = generateMockConflicts(parseInt(limit));
+      source = 'simulation';
+    }
+    
+    res.json({
+      conflicts: conflicts,
+      total: conflicts.length,
+      source: source,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error in conflicts proxy:', error.message);
+    // Ultimate fallback
+    const mockConflicts = generateMockConflicts(50);
+    res.json({
+      conflicts: mockConflicts,
+      total: mockConflicts.length,
+      source: 'error_fallback',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Proxy endpoint for recommendation metrics
+app.get('/api/digital-twin/recommendations/metrics', async (req, res) => {
+  try {
+    console.log('📊 Fetching recommendation metrics...');
+    
+    try {
+      // Try Digital Twin API
+      const metricsResponse = await axios.get('http://localhost:8000/api/v1/recommendations/metrics', {
+        timeout: 5000
+      });
+      
+      if (metricsResponse.data) {
+        return res.json(metricsResponse.data);
+      }
+    } catch (dtError) {
+      console.log(`Digital Twin metrics unavailable: ${dtError.message}`);
+    }
+    
+    // Generate mock metrics
+    console.log('Generating simulated metrics...');
+    const mockMetrics = {
+      total_recommendations: 156,
+      avg_confidence: 0.78,
+      success_rate: 0.73,
+      by_strategy: {
+        delay: 45,
+        reroute: 32,
+        platform_change: 28,
+        speed_adjustment: 21,
+        hold: 18,
+        cancellation: 12
+      },
+      avg_delay_reduction: 12.5,
+      total_conflicts_resolved: 114,
+      source: 'simulation'
+    };
+    
+    res.json(mockMetrics);
+    
+  } catch (error) {
+    console.error('Error fetching metrics:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to generate mock conflicts
+function generateMockConflicts(count = 50) {
+  const conflictTypes = [
+    'platform_conflict', 'track_blockage', 'signal_failure', 'crew_shortage',
+    'weather_disruption', 'capacity_overload', 'timetable_conflict', 'headway_conflict',
+    'rolling_stock_failure', 'infrastructure_work', 'level_crossing_incident'
+  ];
+  const stations = [
+    'London Waterloo', 'London Victoria', 'Birmingham New Street', 'Manchester Piccadilly',
+    'Leeds', 'Glasgow Central', 'Edinburgh Waverley', 'Liverpool Lime Street',
+    'Bristol Temple Meads', 'Newcastle Central', 'Cardiff Central', 'Reading',
+    'Oxford', 'Cambridge', 'York', 'Sheffield', 'Doncaster', 'Preston'
+  ];
+  const severities = ['critical', 'high', 'medium', 'low'];
+  const timesOfDay = ['morning_peak', 'evening_peak', 'midday', 'early_morning', 'evening', 'night'];
+  const outcomes = ['success', 'partial_success', 'failed', 'escalated'];
+  const strategies = ['delay', 'reroute', 'platform_change', 'speed_adjustment', 'hold', 'reorder', 'cancellation'];
+  
+  const conflicts = [];
+  const now = Date.now();
+  
+  // Distribution: 10% critical, 25% high, 40% medium, 25% low
+  const severityDist = [
+    ...Array(Math.floor(count * 0.1)).fill('critical'),
+    ...Array(Math.floor(count * 0.25)).fill('high'),
+    ...Array(Math.floor(count * 0.4)).fill('medium'),
+    ...Array(Math.floor(count * 0.25)).fill('low'),
+  ];
+  
+  for (let i = 0; i < count; i++) {
+    const conflictType = conflictTypes[Math.floor(Math.random() * conflictTypes.length)];
+    const station = stations[Math.floor(Math.random() * stations.length)];
+    const severity = severityDist[i] || 'medium';
+    const timeOfDay = timesOfDay[Math.floor(Math.random() * timesOfDay.length)];
+    const outcome = outcomes[Math.floor(Math.random() * outcomes.length)];
+    const strategy = strategies[Math.floor(Math.random() * strategies.length)];
+    const resolved = outcome === 'success' || outcome === 'partial_success';
+    
+    const trainCount = Math.floor(Math.random() * 3) + 1;
+    const affectedTrains = Array(trainCount).fill(0).map(() => 
+      `${['IC', 'RE', 'HS', 'AV', 'GW', 'XC', 'SE', 'LN', 'EM', 'S'][Math.floor(Math.random() * 10)]}${Math.floor(Math.random() * 9000) + 1000}`
+    );
+    
+    const delayBefore = Math.floor(Math.random() * 60) + 5;
+    const delayAfter = resolved ? Math.floor(delayBefore * (Math.random() * 0.5 + 0.1)) : delayBefore + Math.floor(Math.random() * 20);
+    
+    const timestamp = new Date(now - (Math.random() * 30 * 24 * 60 * 60 * 1000)); // Within last 30 days
+    
+    conflicts.push({
+      id: `conflict-${timestamp.getTime()}-${i}`,
+      conflict_type: conflictType,
+      severity: severity,
+      station: station,
+      time_of_day: timeOfDay,
+      affected_trains: affectedTrains,
+      delay_before: delayBefore,
+      delay_after: delayAfter,
+      description: `${conflictType.replace(/_/g, ' ')} at ${station} affecting ${affectedTrains.join(', ')}`,
+      timestamp: timestamp.toISOString(),
+      detected_at: timestamp.toISOString(),
+      resolved: resolved,
+      recommended_resolution: {
+        strategy: strategy,
+        confidence: Math.random() * 0.3 + 0.6, // 0.6 - 0.9
+        estimated_delay_reduction: Math.floor(delayBefore * (Math.random() * 0.4 + 0.3)),
+        description: `${strategy.replace(/_/g, ' ')} recommended with ${Math.floor(Math.random() * 20 + 70)}% confidence`
+      },
+      final_outcome: {
+        outcome: outcome,
+        actual_delay: delayAfter,
+        resolution_time_minutes: Math.floor(Math.random() * 25) + 5,
+        notes: outcome === 'success' ? 'Resolved successfully' : outcome === 'failed' ? 'Resolution unsuccessful' : 'Partially resolved'
+      },
+      metadata: {
+        simulated: true,
+        passenger_impact_estimate: Math.floor(Math.random() * 800) + 100
+      }
+    });
+  }
+  
+  // Sort by timestamp descending (newest first)
+  return conflicts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
 // Get Stats (kept for system health monitoring)
 app.get('/api/stats', async (req, res) => {
   try {

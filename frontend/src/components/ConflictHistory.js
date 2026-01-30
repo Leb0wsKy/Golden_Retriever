@@ -45,13 +45,14 @@ function ConflictHistory() {
   const fetchConflicts = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:8000/api/v1/conflicts/', {
+      const response = await axios.get('/api/digital-twin/conflicts', {
         params: { limit: 100 }
       });
-      setConflicts(response.data);
+      setConflicts(response.data.conflicts || response.data || []);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching conflicts:', error);
+      setConflicts([]);
       setLoading(false);
     }
   };

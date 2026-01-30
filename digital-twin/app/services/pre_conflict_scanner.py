@@ -227,20 +227,6 @@ class PreConflictScanner:
         )
         return self.embedding_service.embed(state_text)
     
-    def _calculate_similarity(
-        self,
-        current_embedding: List[float],
-        pattern: PreConflictState
-    ) -> float:
-        """
-        Calculate similarity between current state and historical pattern.
-        
-        In production, this would use cosine similarity. For now, we estimate.
-        """
-        # Placeholder: In real implementation, calculate cosine similarity
-        # between current_embedding and the pattern's embedding
-        return 0.82  # Example high similarity
-    
     async def _generate_preventive_alert(
         self,
         current_state: Dict[str, Any],
@@ -308,21 +294,80 @@ class PreConflictScanner:
     
     def _extract_conflict_type(self, pattern: PreConflictState) -> ConflictType:
         """Extract conflict type from pre-conflict pattern."""
-        # Default to track blockage, could be enhanced with ML classification
+        # Extract from pattern's conflict_type field or metadata
+        if pattern.conflict_type:
+            try:
+                return ConflictType(pattern.conflict_type)
+            except (ValueError, AttributeError):
+                pass
+        
+        # Try metadata as fallback
+        metadata = pattern.metadata or {}
+        if 'later_conflict_type' in metadata:
+            try:
+                return ConflictType(metadata['later_conflict_type'])
+            except (ValueError, AttributeError):
+                pass
+        
+        # Default fallback
+        logger.warning(f"Could not extract conflict type from pattern {pattern.id}, using default")
         return ConflictType.TRACK_BLOCKAGE
     
     def _extract_severity(self, pattern: PreConflictState) -> ConflictSeverity:
         """Estimate severity based on historical pattern."""
-        return ConflictSeverity.MEDIUM
+        # Extract from metadata if available
+        metadata = pattern.metadata or {}
+        network_state = metadata.get('network_state', {})
+        
+        # Calculate severity based on network conditions
+        active_trains = network_state.get('active_trains', 0)
+        avg_delay = network_state.get('average_delay_minutes', 0)
+        network_density = network_state.get('network_density', 0)
+        
+        # Severity scoring
+        severity_score = 0
+        if active_trains > 20: severity_score += 2
+        elif active_trains > 15: severity_score += 1
+        
+        if avg_delay > 6: severity_score += 2
+        elif avg_delay > 3: severity_score += 1
+        
+        if network_density > 0.8: severity_score += 2
+        elif network_density > 0.6: severity_score += 1
+        
+        # Map score to severity
+        if severity_score >= 5:
+            return ConflictSeverity.CRITICAL
+        elif severity_score >= 3:
+            return ConflictSeverity.HIGH
+        elif severity_score >= 1:
+            return ConflictSeverity.MEDIUM
+        else:
+            return ConflictSeverity.LOW
     
     def _estimate_time_to_conflict(self, pattern: PreConflictState) -> int:
         """
         Estimate minutes until conflict based on historical pattern.
         
-        In production, this would analyze the time delta between pre-conflict
-        state and actual conflict occurrence.
+        Extracts the actual time delta from the pattern metadata.
         """
-        return 15  # Default: 15 minutes warning
+        # Extract from metadata
+        metadata = pattern.metadata or {}
+        if 'minutes_until_conflict' in metadata:
+            return int(metadata['minutes_until_conflict'])
+        
+        # Estimate based on network density if no metadata
+        network_state = metadata.get('network_state', {})
+        network_density = network_state.get('network_density', 0.5)
+        avg_delay = network_state.get('average_delay_minutes', 0)
+        
+        # Higher density + delays = less time until conflict
+        if network_density > 0.8 and avg_delay > 5:
+            return 10  # Critical situation - 10 min warning
+        elif network_density > 0.6 and avg_delay > 3:
+            return 15  # Moderate - 15 min warning
+        else:
+            return 20  # Lower risk - 20 min warning
     
     def _suggest_preventive_actions(
         self,

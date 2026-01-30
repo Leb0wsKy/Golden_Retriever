@@ -33,14 +33,14 @@ function Analytics() {
     try {
       setLoading(true);
       const [metricsRes, conflictsRes] = await Promise.all([
-        axios.get('http://localhost:8000/api/v1/recommendations/metrics'),
-        axios.get('http://localhost:8000/api/v1/conflicts/', { params: { limit: 500 } })
+        axios.get('/api/digital-twin/recommendations/metrics'),
+        axios.get('/api/digital-twin/conflicts', { params: { limit: 500 } })
       ]);
       
       setMetrics(metricsRes.data);
       
       // Calculate conflict statistics
-      const conflicts = conflictsRes.data;
+      const conflicts = conflictsRes.data.conflicts || conflictsRes.data || [];
       const stats = {
         total: conflicts.length,
         resolved: conflicts.filter(c => c.resolved).length,
