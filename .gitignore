@@ -1,14 +1,50 @@
+# Dependencies
 node_modules/
+venv/
+.venv/
+
+# Environment files (contain API keys)
 .env
-*.log
-.DS_Store
+*.env.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Build outputs
 build/
 dist/
-__pycache__/
-*.pyc
-venv/
+*.egg-info/
+
+# IDE/Editor
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local storage (Qdrant)
+qdrant_storage/
+
+# Test/debug files
 *.tex
+
+# Internal dev docs (not for submission)
 DEMO-SCRIPT.md
 final.md
+
+# Model files (too large for git)
+*.pth
+*.bin
+*.onnx
+ai-service/dataset/models/

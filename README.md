@@ -81,22 +81,23 @@ AI Service (Flask, embeddings) ───► Qdrant (train_alerts vectors) ◄─
 ## Repository layout
 
 ```
-backend/        Express API + routes (/api/*)
-frontend/       React dashboard
-qdrant/         Qdrant client config, collection helpers, alert similarity, seeding
-ai-service/     Flask embeddings service (optional)
-digital-twin/   Flask simulation service (optional)
-start-all.bat   Starts backend + frontend (Windows)
-stop-all.bat    Stops Node processes (Windows)
-setup.bat       Installs backend + frontend dependencies
+backend/        Express API + routes (/api/*), Qdrant integration
+frontend/       React dashboard with Leaflet maps
+ai-service/     Flask embeddings + conflict prediction model
+digital-twin/   FastAPI simulation service (conflict resolution, learning)
+start-all.bat   Starts all services (Windows)
+stop-all.bat    Stops all processes (Windows)
+setup.bat       Installs all dependencies
 ```
 
 ## Ports & URLs (defaults)
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
-- AI Service (optional): http://localhost:5001
-- Digital Twin (optional): http://localhost:5002
+| Service | Port | URL |
+|---------|------|-----|
+| Frontend | 3000 | http://localhost:3000 |
+| Backend API | 5000 | http://localhost:5000 |
+| AI Service | 5001 | http://localhost:5001 |
+| Digital Twin | 8000 | http://localhost:8000 |
 
 ## Configuration
 
@@ -160,10 +161,10 @@ Seeding is what makes similarity search useful: it loads a small training set of
 2. Run:
 
 ```powershell
-node .\qdrant\seed-alerts.js
+node .\backend\seed-alerts.js
 ```
 
-This will populate the Qdrant collection named `train_alerts`.
+This will populate the Qdrant collection with training data.
 
 ### 3) Live alerts workflow (Transitland → anomalies → Qdrant → solution)
 
@@ -176,9 +177,7 @@ This will populate the Qdrant collection named `train_alerts`.
 Invoke-RestMethod http://localhost:5000/api/alerts/live
 ```
 
-To understand the alert pipeline in detail, see:
-- `HOW-ALERTS-WORK.md`
-- `LIVE-ALERTS-INTEGRATION.md`
+The alert pipeline: live data → anomaly detection → embedding → Qdrant similarity search → recommendation.
 
 ### 4) Optional: run AI Service (embeddings)
 
@@ -197,10 +196,10 @@ cd .\digital-twin
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python app.py
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-The backend proxies digital-twin calls via `/api/digital-twin/*` (e.g. `/api/digital-twin/data`).
+The backend proxies digital-twin calls via `/api/digital-twin/*`.
 
 ## Useful backend endpoints
 
