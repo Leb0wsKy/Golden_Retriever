@@ -1652,6 +1652,49 @@ app.get('/api/digital-twin/recommendations/golden-runs/:goldenRunId', async (req
 });
 
 // ============================================
+// ML PREDICTION ENDPOINTS
+// ============================================
+
+// Store ML prediction in Digital Twin
+app.post('/api/digital-twin/ml/predictions', async (req, res) => {
+  try {
+    const response = await axios.post(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/ml/predictions`,
+      req.body
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error storing ML prediction:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to store ML prediction',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// Get ML predictions from Digital Twin
+app.get('/api/digital-twin/ml/predictions', async (req, res) => {
+  try {
+    const { limit = 50, network_id, min_probability } = req.query;
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit);
+    if (network_id) params.append('network_id', network_id);
+    if (min_probability) params.append('min_probability', min_probability);
+    
+    const response = await axios.get(
+      `${process.env.DIGITAL_TWIN_URL}/api/v1/ml/predictions?${params.toString()}`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching ML predictions:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch ML predictions',
+      message: error.response?.data?.detail || error.message 
+    });
+  }
+});
+
+// ============================================
 // DEPRECATED ENDPOINTS (Kept for compatibility)
 // ============================================
 

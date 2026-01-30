@@ -47,22 +47,52 @@ function PreConflictAlerts() {
 
   const fetchAlerts = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/preventive-alerts/');
-      // API returns array directly, not wrapped in {alerts: [...]}
-      setAlerts(Array.isArray(response.data) ? response.data : []);
+      // Fetch both preventive alerts AND ML predictions
+      const [preventiveResponse, mlResponse] = await Promise.all([
+        axios.get('http://localhost:5000/api/digital-twin/preventive-alerts/').catch(() => ({ data: [] })),
+        axios.get('http://localhost:5000/api/digital-twin/ml/predictions?limit=20&min_probability=0.4').catch(() => ({ data: [] }))
+      ]);
+      
+      const preventiveAlerts = Array.isArray(preventiveResponse.data) ? preventiveResponse.data : [];
+      const mlPredictions = Array.isArray(mlResponse.data) ? mlResponse.data : [];
+      
+      // Combine both types of alerts
+      const combinedAlerts = [
+        ...mlPredictions.map(pred => ({
+          alert_id: pred.id,
+          detected_at: pred.detected_at,
+          similarity_score: pred.confidence,
+          predicted_conflict_type: 'ml_prediction',
+          predicted_severity: pred.severity,
+          predicted_location: pred.network_id,
+          time_to_conflict_minutes: 15, // Default for ML predictions
+          recommended_actions: pred.contributing_factors || [],
+          explanation: pred.alert_message,
+          confidence: pred.confidence,
+          source: 'ml_model',
+          risk_level: pred.risk_level,
+          probability: pred.probability
+        })),
+        ...preventiveAlerts.map(alert => ({
+          ...alert,
+          source: 'pattern_matching'
+        }))
+      ];
+      
+      setAlerts(combinedAlerts);
       setLastUpdate(new Date());
       setLoading(false);
-      setError(null); // Clear any previous errors
+      setError(null);
     } catch (error) {
-      console.error('Error fetching preventive alerts:', error);
-      setError('Failed to fetch alerts. Please check if the API is running.');
+      console.error('Error fetching alerts:', error);
+      setError('Failed to fetch alerts. Please check if services are running.');
       setLoading(false);
     }
   };
 
   const fetchScannerStatus = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/preventive-alerts/health');
+      const response = await axios.get('http://localhost:5000/api/digital-twin/preventive-alerts/health');
       setScannerStatus(response.data);
     } catch (error) {
       console.error('Error fetching scanner status:', error);
@@ -73,7 +103,7 @@ function PreConflictAlerts() {
   const handleManualScan = async () => {
     try {
       setLoading(true);
-      await axios.post('http://localhost:8000/api/v1/preventive-alerts/scan', {
+      await axios.post('http://localhost:5000/api/digital-twin/preventive-alerts/scan', {
         similarity_threshold: 0.35,
         alert_confidence_threshold: 0.3
       });

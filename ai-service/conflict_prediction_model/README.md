@@ -261,6 +261,46 @@ ValueError: Missing required features
 - [ ] Implement ensemble of multiple models
 - [ ] Add anomaly detection for input validation
 
+## 🚀 Production Integration
+
+The model is integrated into the Golden Retriever platform through:
+
+### 1. ML Prediction API (Port 5003)
+```bash
+cd .. # Go to ai-service directory
+python ml_prediction_api.py
+```
+Serves the model via REST API with endpoints for:
+- Real-time conflict prediction
+- Network analysis from live train data
+- Batch predictions
+
+### 2. ML Integration Service
+```bash
+python ml_integration_service.py
+```
+Monitors networks every 30 seconds and automatically:
+- Fetches active trains
+- Predicts conflicts using ML model
+- Creates pre-conflict alerts in Digital Twin
+- Displays warnings in frontend dashboard
+
+### 3. Quick Start Scripts
+```bash
+# From project root
+.\start-ml-api.bat           # Start ML API
+.\start-ml-integration.bat   # Start monitoring service
+```
+
+### Architecture Flow
+```
+Backend → ML Integration → ML API → Pre-Conflict Alerts → Frontend
+```
+
+See [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for complete details.
+
+---
+
 ## License
 
 Part of the Golden Retriever Rail Network Monitoring Platform

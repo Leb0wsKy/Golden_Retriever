@@ -355,7 +355,7 @@ class QdrantService:
             return
         
         try:
-            from qdrant_client.models import Distance, VectorParams
+            from qdrant_client.models import Distance, VectorParams, PayloadSchemaType
             
             # Get existing collections
             existing = {c.name for c in self.client.get_collections().collections}
@@ -381,6 +381,25 @@ class QdrantService:
                         distance=Distance.COSINE
                     )
                 )
+                
+                # Create payload indexes for efficient filtering
+                logger.info("Creating payload indexes for pre_conflict_memory...")
+                self.client.create_payload_index(
+                    collection_name=CollectionName.PRE_CONFLICT_MEMORY.value,
+                    field_name="source",
+                    field_schema=PayloadSchemaType.KEYWORD
+                )
+                self.client.create_payload_index(
+                    collection_name=CollectionName.PRE_CONFLICT_MEMORY.value,
+                    field_name="network_id",
+                    field_schema=PayloadSchemaType.KEYWORD
+                )
+                self.client.create_payload_index(
+                    collection_name=CollectionName.PRE_CONFLICT_MEMORY.value,
+                    field_name="probability",
+                    field_schema=PayloadSchemaType.FLOAT
+                )
+                logger.info("Payload indexes created")
             
             self._collections_initialized = True
             logger.info("All collections initialized")

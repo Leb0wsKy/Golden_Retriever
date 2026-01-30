@@ -55,35 +55,75 @@ class NetworkConflictPredictor:
         print("\nPreparing features...")
         
         # Define feature columns
-        numeric_features = [
+        # Exclude features that leak target information:
+        #   - conflict_count, conflict_ratio (directly derived from conflicts)
+        #   - conflict_score, conflict_probability (used to generate labels)
+        
+        # Core network metrics (safe to use)
+        network_features = [
             'train_count',
-            'anomaly_count',
-            'conflict_count',
-            'delay_high_count',
-            'avg_delay',
             'avg_speed',
-            'anomaly_ratio',
-            'conflict_ratio',
-            'proximity_conflict_count',
-            'congestion_conflict_count'
+            'std_speed',
+            'min_speed',
+            'speed_variance',
+            'slow_train_ratio',
+            'fast_train_ratio'
         ]
         
-        boolean_features = [
-            'network_congestion_conflict',
-            'network_proximity_conflict',
-            'network_delay_conflict',
-            'network_anomaly_spike'
+        # Delay features (observable before conflict determination)
+        delay_features = [
+            'avg_delay',
+            'max_delay',
+            'std_delay',
+            'delayed_train_count',
+            'delayed_ratio',
+            'severe_delay_count',
+            'delayed_status_count',
+            'status_delay_mismatch'
         ]
         
-        # Combine all features
-        self.feature_names = numeric_features + boolean_features
+        # Anomaly features
+        anomaly_features = [
+            'anomaly_count',
+            'anomaly_ratio'
+        ]
+        
+        # Proximity/density features
+        proximity_features = [
+            'avg_nearest_distance',
+            'min_nearest_distance',
+            'crowded_locations',
+            'avg_nearby_trains'
+        ]
+        
+        # Interaction features (compound indicators)
+        interaction_features = [
+            'high_density_slow_speed',
+            'delayed_with_high_proximity',
+            'speed_delay_correlation',
+            'location_spread'
+        ]
+        
+        # Temporal trend features
+        temporal_features = [
+            'avg_speed_trend',
+            'avg_delay_trend',
+            'anomaly_ratio_trend',
+            'delayed_ratio_trend'
+        ]
+        
+        # Combine all legitimate predictive features
+        self.feature_names = (
+            network_features + 
+            delay_features + 
+            anomaly_features + 
+            proximity_features + 
+            interaction_features +
+            temporal_features
+        )
         
         # Extract features and target
         X = self.df[self.feature_names].copy()
-        
-        # Convert boolean columns to int
-        for col in boolean_features:
-            X[col] = X[col].astype(int)
         
         # Handle any missing values
         X = X.fillna(0)
@@ -132,14 +172,15 @@ class NetworkConflictPredictor:
             print("Performing hyperparameter optimization...")
             
             param_grid = {
-                'n_estimators': [100, 200, 300],
-                'max_depth': [10, 20, 30, None],
+                'n_estimators': [200, 300, 500],
+                'max_depth': [10, 15, 20, None],
                 'min_samples_split': [2, 5, 10],
                 'min_samples_leaf': [1, 2, 4],
-                'max_features': ['sqrt', 'log2']
+                'max_features': ['sqrt', 'log2'],
+                'class_weight': ['balanced', 'balanced_subsample']
             }
             
-            rf = RandomForestClassifier(random_state=42, class_weight='balanced')
+            rf = RandomForestClassifier(random_state=42)
             
             grid_search = GridSearchCV(
                 rf, param_grid, 
@@ -155,16 +196,18 @@ class NetworkConflictPredictor:
             print(f"\nBest parameters: {grid_search.best_params_}")
             print(f"Best CV F1 score: {grid_search.best_score_:.4f}")
         else:
-            # Train with default good parameters
+            # Train with parameters optimized for imbalanced data
             self.model = RandomForestClassifier(
-                n_estimators=200,
-                max_depth=20,
+                n_estimators=300,
+                max_depth=15,
                 min_samples_split=5,
                 min_samples_leaf=2,
                 max_features='sqrt',
                 random_state=42,
-                class_weight='balanced',
-                n_jobs=-1
+                class_weight='balanced_subsample',  # Better for imbalanced data
+                max_samples=0.8,  # Bootstrap with subsampling
+                n_jobs=-1,
+                verbose=0
             )
             
             self.model.fit(X_train, y_train)
@@ -282,7 +325,7 @@ class NetworkConflictPredictor:
             
             # Save to CSV
             importance_df.to_csv(
-                'conflict_prediction_model/feature_importance.csv',
+                'feature_importance.csv',
                 index=False
             )
             print("\nFeature importance saved to 'feature_importance.csv'")
@@ -292,9 +335,9 @@ class NetworkConflictPredictor:
             print("\nModel does not support feature importance.")
             return None
     
-    def save_model(self, model_dir='conflict_prediction_model'):
+    def save_model(self, model_dir='.'):
         """Save trained model and artifacts"""
-        print(f"\nSaving model to '{model_dir}/'...")
+        print(f"\nSaving model artifacts...")
         
         # Save model
         joblib.dump(self.model, f'{model_dir}/conflict_predictor.pkl')
@@ -334,7 +377,7 @@ def main():
     print("="*60)
     
     # Configuration
-    DATASET_PATH = '../dataset/processed/network_conflicts_minute.csv'
+    DATASET_PATH = 'network_conflicts_realistic.csv'  # New realistic dataset
     MODEL_TYPE = 'random_forest'  # Options: 'random_forest', 'gradient_boosting'
     OPTIMIZE_HYPERPARAMS = False  # Set to True for hyperparameter tuning (slower)
     
@@ -371,7 +414,7 @@ def main():
     print("\n" + "="*60)
     print("TRAINING COMPLETE!")
     print("="*60)
-    print("\nModel artifacts saved in 'conflict_prediction_model/' directory:")
+    print("\nModel artifacts saved:")
     print("  - conflict_predictor.pkl (trained model)")
     print("  - scaler.pkl (feature scaler)")
     print("  - feature_names.json (feature list)")

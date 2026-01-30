@@ -1,0 +1,17 @@
+{
+  "train_accuracy": 0.9934782608695653,
+  "test_accuracy": 0.9130434782608695,
+  "train_auc": 0.9999698971989344,
+  "test_auc": 0.5183333333333333,
+  "train_precision": 1.0,
+  "train_recall": 0.9240506329113924,
+  "train_f1": 0.9605263157894737,
+  "test_precision": 0.5,
+  "test_recall": 0.05,
+  "test_f1": 0.09090909090909091,
+  "model_type": "RandomForestClassifier",
+  "training_date": "2026-01-30T21:07:52.331292",
+  "dataset_path": "network_conflicts_realistic.csv",
+  "total_samples": 1150,
+  "feature_count": 29
+}
