@@ -47,4 +47,8 @@ final.md
 *.pth
 *.bin
 *.onnx
+*.pkl
 ai-service/dataset/models/
+
+# Data files
+*.csv
