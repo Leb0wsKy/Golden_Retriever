@@ -4,6 +4,8 @@ const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const axios = require('axios');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const authService = require('./auth-service');
 
 // Note: Legacy Qdrant modules for deprecated alerts system (lines 197-699) are no longer imported
