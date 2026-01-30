@@ -10,7 +10,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
 from datetime import datetime
 
-# Add conflicts-collection to path for network_monitor import
+# Add conflicts-collection directory to path for network_monitor import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'conflicts-collection'))
 from network_monitor import get_network_monitor
 
