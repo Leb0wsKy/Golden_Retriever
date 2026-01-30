@@ -161,10 +161,24 @@ function Dashboard({ stats }) {
             fontWeight: 900,
             mb: 1,
             textShadow: '2px 2px 4px rgba(0,0,0,0.1)',
-            letterSpacing: '-0.5px'
+            letterSpacing: '-0.5px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2
           }}
         >
-          🚄 Live Train Network Monitor
+          <img 
+            src="/Face_golden_retriever.png" 
+            alt="Golden Retriever" 
+            style={{ 
+              width: '60px', 
+              height: '60px', 
+              borderRadius: '50%',
+              objectFit: 'cover'
+            }} 
+          />
+          Live Train Network Monitor
         </Typography>
         <Typography variant="body1" sx={{ color: '#666', fontWeight: 500 }}>
           Real-time tracking of {totalTrains} trains across {networks.length} networks worldwide
@@ -234,11 +248,6 @@ function Dashboard({ stats }) {
             </Card>
           </Grid>
         ))}
-
-        {/* Pre-Conflict Alerts Panel */}
-        <Grid item xs={12} md={4}>
-          <PreConflictAlerts />
-        </Grid>
 
         {/* Map Section */}
         <Grid item xs={12} md={8}>
@@ -522,6 +531,11 @@ function Dashboard({ stats }) {
               )}
             </Box>
           </Paper>
+        </Grid>
+
+        {/* Pre-Conflict Alerts Panel */}
+        <Grid item xs={12} md={12}>
+          <PreConflictAlerts />
         </Grid>
       </Grid>
     </Box>

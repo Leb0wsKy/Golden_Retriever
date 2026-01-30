@@ -87,16 +87,32 @@ function PreConflictAlerts() {
     }
   };
 
-  const getSeverityColor = (confidence) => {
-    if (confidence >= 0.65) return 'error';    // High confidence (65%+)
-    if (confidence >= 0.45) return 'warning';  // Medium confidence (45-65%)
-    return 'info';                              // Lower confidence (30-45%)
+  const getSeverityColor = (severity) => {
+    const severityLower = severity?.toLowerCase() || '';
+    if (severityLower === 'high' || severityLower === 'critical' || severityLower === 'severe') {
+      return '#ef5350'; // Red for critical
+    }
+    if (severityLower === 'medium' || severityLower === 'moderate') {
+      return '#ff9800'; // Orange for medium
+    }
+    return '#fdd835'; // Yellow for low
   };
 
-  const getSeverityIcon = (confidence) => {
-    if (confidence >= 0.65) return <ErrorIcon />;    // High confidence
-    if (confidence >= 0.45) return <WarningIcon />;  // Medium confidence
-    return <TrendingUpIcon />;                        // Lower confidence
+  const getSeverityIcon = (severity) => {
+    const severityLower = severity?.toLowerCase() || '';
+    if (severityLower === 'high' || severityLower === 'critical' || severityLower === 'severe') {
+      return <ErrorIcon />;
+    }
+    if (severityLower === 'medium' || severityLower === 'moderate') {
+      return <WarningIcon />;
+    }
+    return <TrendingUpIcon />;
+  };
+
+  const getConfidenceBadgeColor = (confidence) => {
+    if (confidence >= 0.7) return '#ef5350';
+    if (confidence >= 0.5) return '#ff9800';
+    return '#66bb6a';
   };
 
   const formatTimeToConflict = (minutes) => {
@@ -113,22 +129,41 @@ function PreConflictAlerts() {
       sx={{ 
         p: 3, 
         height: '100%',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white'
+        background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%)',
+        color: 'white',
+        borderRadius: 3,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <WarningIcon sx={{ fontSize: 28 }} />
-          <Typography variant="h6" fontWeight="bold">
-            Pre-Conflict Alerts
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ 
+            bgcolor: 'rgba(255,255,255,0.15)', 
+            p: 1, 
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center'
+          }}>
+            <WarningIcon sx={{ fontSize: 28 }} />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight="bold">
+              ⚡ Pre-Conflict Alerts
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.8 }}>
+              Predictive Pattern Detection
+            </Typography>
+          </Box>
         </Box>
         <Tooltip title="Trigger manual scan">
           <IconButton 
             onClick={handleManualScan} 
             disabled={loading}
-            sx={{ color: 'white' }}
+            sx={{ 
+              color: 'white',
+              bgcolor: 'rgba(255,255,255,0.15)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' }
+            }}
           >
             <RefreshIcon />
           </IconButton>
@@ -137,17 +172,32 @@ function PreConflictAlerts() {
 
       {/* Scanner Status */}
       {scannerStatus && (
-        <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 1 }}>
+        <Box sx={{ 
+          mb: 2, 
+          p: 1.5, 
+          bgcolor: 'rgba(255,255,255,0.12)', 
+          borderRadius: 2,
+          border: '1px solid rgba(255,255,255,0.2)'
+        }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2">
-              Scanner Status: <strong>{scannerStatus.status}</strong>
+            <Typography variant="body2" fontWeight={600}>
+              Scanner: <Chip 
+                label={scannerStatus.status} 
+                size="small" 
+                sx={{ 
+                  bgcolor: scannerStatus.status === 'healthy' ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  ml: 1
+                }}
+              />
             </Typography>
             {scannerStatus.status === 'healthy' && (
-              <CheckCircleIcon sx={{ color: '#4caf50' }} />
+              <CheckCircleIcon sx={{ color: '#66bb6a' }} />
             )}
           </Box>
-          <Typography variant="caption" sx={{ opacity: 0.8 }}>
-            Threshold: {(scannerStatus.similarity_threshold * 100).toFixed(0)}% similarity
+          <Typography variant="caption" sx={{ opacity: 0.7, mt: 0.5, display: 'block' }}>
+            🎯 Threshold: {(scannerStatus.similarity_threshold * 100).toFixed(0)}% similarity
           </Typography>
         </Box>
       )}
@@ -175,25 +225,43 @@ function PreConflictAlerts() {
             <ListItem 
               key={index}
               sx={{ 
-                bgcolor: 'rgba(255,255,255,0.1)', 
-                borderRadius: 1, 
+                bgcolor: 'rgba(255,255,255,0.12)', 
+                borderRadius: 2, 
                 mb: 1.5,
                 flexDirection: 'column',
-                alignItems: 'flex-start'
+                alignItems: 'flex-start',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderLeftWidth: 4,
+                borderLeftColor: getSeverityColor(alert.predicted_severity),
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  bgcolor: 'rgba(255,255,255,0.18)',
+                  transform: 'translateX(4px)',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
+                }
               }}
             >
               <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  {getSeverityIcon(alert.confidence)}
+                  <Box sx={{ 
+                    bgcolor: getSeverityColor(alert.predicted_severity),
+                    p: 0.5,
+                    borderRadius: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: 'white'
+                  }}>
+                    {getSeverityIcon(alert.predicted_severity)}
+                  </Box>
                   <Typography variant="subtitle2" fontWeight="bold">
                     {alert.predicted_conflict_type?.replace(/_/g, ' ').toUpperCase()}
                   </Typography>
                 </Box>
                 <Chip 
-                  label={`${(alert.confidence * 100).toFixed(0)}% confidence`}
+                  label={`${(alert.confidence * 100).toFixed(0)}%`}
                   size="small"
                   sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.2)',
+                    bgcolor: getConfidenceBadgeColor(alert.confidence),
                     color: 'white',
                     fontWeight: 'bold'
                   }}
@@ -204,29 +272,44 @@ function PreConflictAlerts() {
                 {alert.explanation}
               </Typography>
 
-              <Box sx={{ width: '100%', display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ width: '100%', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Chip 
-                  icon={<ScheduleIcon sx={{ color: 'white !important' }} />}
+                  icon={<ScheduleIcon sx={{ color: 'white !important', fontSize: 16 }} />}
                   label={formatTimeToConflict(alert.time_to_conflict_minutes)}
                   size="small"
-                  sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: 'white' }}
+                  sx={{ 
+                    bgcolor: 'rgba(255,255,255,0.2)', 
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: '0.75rem'
+                  }}
                 />
                 <Chip 
-                  label={alert.predicted_location}
+                  label={`📍 ${alert.predicted_location}`}
                   size="small"
-                  sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: 'white' }}
+                  sx={{ 
+                    bgcolor: 'rgba(255,255,255,0.2)', 
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: '0.75rem'
+                  }}
                 />
                 <Chip 
-                  label={alert.predicted_severity}
+                  label={alert.predicted_severity?.toUpperCase()}
                   size="small"
-                  color={getSeverityColor(alert.confidence)}
+                  sx={{
+                    bgcolor: getSeverityColor(alert.predicted_severity),
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '0.75rem'
+                  }}
                 />
               </Box>
 
               {alert.recommended_actions && alert.recommended_actions.length > 0 && (
                 <Box sx={{ mt: 1.5, width: '100%' }}>
-                  <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', mb: 0.5 }}>
-                    Recommended Actions:
+                  <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mb: 0.5, fontWeight: 600 }}>
+                    💡 Recommended Actions:
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                     {alert.recommended_actions.map((action, i) => (
@@ -235,9 +318,11 @@ function PreConflictAlerts() {
                         label={action.replace(/_/g, ' ')}
                         size="small"
                         sx={{ 
-                          bgcolor: 'rgba(76, 175, 80, 0.2)',
+                          bgcolor: 'rgba(102, 187, 106, 0.3)',
                           color: 'white',
-                          fontSize: '0.7rem'
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          border: '1px solid rgba(102, 187, 106, 0.4)'
                         }}
                       />
                     ))}

@@ -32,23 +32,23 @@ function Analytics() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      const [metricsRes, conflictsRes] = await Promise.all([
-        axios.get('/api/digital-twin/recommendations/metrics'),
-        axios.get('/api/digital-twin/conflicts', { params: { limit: 500 } })
-      ]);
       
-      setMetrics(metricsRes.data);
+      // Fetch conflicts data
+      const conflictsRes = await axios.get('/api/digital-twin/conflicts', { params: { limit: 500 } });
+      const conflicts = conflictsRes.data.conflicts || conflictsRes.data || [];
+      
+      console.log('Fetched conflicts:', conflicts.length);
+      console.log('Sample conflict:', conflicts[0]);
       
       // Calculate conflict statistics
-      const conflicts = conflictsRes.data.conflicts || conflictsRes.data || [];
       const stats = {
         total: conflicts.length,
         resolved: conflicts.filter(c => c.resolved).length,
         active: conflicts.filter(c => !c.resolved).length,
         bySeverity: {
-          critical: conflicts.filter(c => c.severity === 'critical').length,
+          critical: conflicts.filter(c => c.severity === 'critical' || c.severity === 'high').length,
           high: conflicts.filter(c => c.severity === 'high').length,
-          medium: conflicts.filter(c => c.severity === 'medium').length,
+          medium: conflicts.filter(c => c.severity === 'medium' || c.severity === 'moderate').length,
           low: conflicts.filter(c => c.severity === 'low').length,
         },
         byType: conflicts.reduce((acc, c) => {
@@ -61,6 +61,64 @@ function Analytics() {
       };
       
       setConflictStats(stats);
+      
+      // Calculate metrics from conflict data directly
+      const resolvedConflicts = conflicts.filter(c => c.resolved && c.recommended_resolution);
+      const successfulResolutions = conflicts.filter(c => 
+        c.resolved && 
+        c.final_outcome && 
+        (c.final_outcome.outcome === 'success' || c.final_outcome.outcome === 'SUCCESS')
+      );
+      
+      console.log('Resolved conflicts with recommendations:', resolvedConflicts.length);
+      console.log('Successful resolutions:', successfulResolutions.length);
+      
+      // Calculate average confidence from recommendations
+      const recommendationsWithConfidence = conflicts.filter(c => 
+        c.recommended_resolution && typeof c.recommended_resolution.confidence === 'number'
+      );
+      const avgConfidence = recommendationsWithConfidence.length > 0
+        ? recommendationsWithConfidence.reduce((sum, c) => sum + c.recommended_resolution.confidence, 0) / recommendationsWithConfidence.length
+        : 0;
+      
+      console.log('Recommendations with confidence:', recommendationsWithConfidence.length);
+      console.log('Average confidence:', avgConfidence);
+      
+      // Calculate average delay reduction
+      const conflictsWithDelayData = conflicts.filter(c => 
+        typeof c.delay_before === 'number' && 
+        c.final_outcome && 
+        typeof c.final_outcome.actual_delay === 'number'
+      );
+      const avgDelayReduction = conflictsWithDelayData.length > 0
+        ? conflictsWithDelayData.reduce((sum, c) => {
+            const reduction = c.delay_before - c.final_outcome.actual_delay;
+            return sum + Math.max(0, reduction);
+          }, 0) / conflictsWithDelayData.length
+        : 0;
+      
+      console.log('Conflicts with delay data:', conflictsWithDelayData.length);
+      console.log('Average delay reduction:', avgDelayReduction);
+      
+      // Calculate success rate
+      const successRate = resolvedConflicts.length > 0
+        ? successfulResolutions.length / resolvedConflicts.length
+        : 0;
+      
+      console.log('Success rate:', successRate);
+      
+      const calculatedMetrics = {
+        total_recommendations: conflicts.filter(c => c.recommended_resolution).length,
+        average_confidence: avgConfidence,
+        average_delay_reduction: avgDelayReduction,
+        success_rate: successRate,
+        total_feedback: resolvedConflicts.length,
+        prediction_accuracy: successRate,
+      };
+      
+      console.log('Calculated metrics:', calculatedMetrics);
+      setMetrics(calculatedMetrics);
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching analytics:', error);

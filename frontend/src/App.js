@@ -96,7 +96,7 @@ function App() {
               }}
             >
               <img 
-                src="/golden-retriever-logo.png" 
+                src="/Face_golden_retriever.png" 
                 alt="Golden Retriever" 
                 style={{ 
                   height: '45px', 
